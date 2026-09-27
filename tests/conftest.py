@@ -11,7 +11,8 @@
 Переменные окружения:
   KICADFP_EXTRA_FIXTURES — список каталогов через ``os.pathsep`` с дополнительными
       .pretty (полные клоны библиотек) для расширенного прогона round-trip;
-  KICAD_CLI — путь к kicad-cli; при отсутствии тесты с маркером ``kicad_cli`` пропускаются.
+  KICAD_CLI — путь к kicad-cli; при отсутствии тесты с маркером ``kicad_cli`` пропускаются
+      (фикстура ``kicad_cli`` требует kicad-cli >= 9, ``kicad_cli_any`` — любую версию).
 """
 
 from __future__ import annotations
@@ -88,11 +89,57 @@ def legacy_mod() -> Path:
     return FIXTURES / "legacy_mod" / "My_lib.mod"
 
 
-@pytest.fixture
-def kicad_cli() -> str:
-    """Путь к kicad-cli или skip."""
+def _find_kicad_cli() -> str | None:
     cli = os.environ.get("KICAD_CLI") or shutil.which("kicad-cli")
     if not cli or not Path(cli).exists():
+        return None
+    return cli
+
+
+def kicad_cli_version(cli: str) -> tuple[int, ...]:
+    """Версия kicad-cli как кортеж чисел (``kicad-cli version`` -> ``7.0.11`` -> (7, 0, 11)).
+
+    При ошибке запуска возвращает пустой кортеж.
+    """
+    import re
+    import subprocess
+
+    try:
+        out = subprocess.run([cli, "version"], capture_output=True, text=True, timeout=120).stdout
+    except (OSError, subprocess.SubprocessError):
+        return ()
+    m = re.search(r"(\d+)\.(\d+)(?:\.(\d+))?", out)
+    return tuple(int(x) for x in m.groups() if x is not None) if m else ()
+
+
+# Минимальная версия KiCad, читающая файлы, которые пишет Программа по умолчанию
+# (DEFAULT_VERSION = 20241229, формат KiCad 9). KiCad 7 такие файлы отвергает
+# («Unable to load library»), поэтому для них нужен kicad-cli >= 9.
+KICAD_CLI_MIN_MAJOR = 9
+
+
+@pytest.fixture
+def kicad_cli() -> str:
+    """Путь к kicad-cli версии >= 9 (читает файлы формата KiCad 9) или skip.
+
+    Для проверки файлов старых форматов (KiCad 5/6/7, version <= 20221018) любой
+    версией kicad-cli используйте фикстуру ``kicad_cli_any``.
+    """
+    cli = _find_kicad_cli()
+    if not cli:
+        pytest.skip("kicad-cli не найден (задайте KICAD_CLI)")
+    ver = kicad_cli_version(cli)
+    if ver and ver[0] < KICAD_CLI_MIN_MAJOR:
+        pytest.skip(f"kicad-cli {'.'.join(map(str, ver))} не читает файлы формата KiCad "
+                    f"{KICAD_CLI_MIN_MAJOR}+ (нужен kicad-cli >= {KICAD_CLI_MIN_MAJOR})")
+    return cli
+
+
+@pytest.fixture
+def kicad_cli_any() -> str:
+    """Путь к kicad-cli любой версии (для файлов форматов KiCad 5/6/7) или skip."""
+    cli = _find_kicad_cli()
+    if not cli:
         pytest.skip("kicad-cli не найден (задайте KICAD_CLI)")
     return cli
 

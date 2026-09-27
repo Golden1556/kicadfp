@@ -17,14 +17,17 @@ const PY = REPO + '/.venv/bin/python'
 const SCRATCH = REPO + '/.cache/scratch'
 const KSRC = REPO + '/refs/kicad-src'
 const KFP = REPO + '/.cache/kfp'
-const KICAD_CLI = 'kicad-cli'  // локально на Mac: kicad-cli; в облаке — если установлен
+const KICAD_CLI = (args && args.kicad_cli) || 'kicad-cli'  // путь к kicad-cli (args.kicad_cli); локально на Mac: kicad-cli
+// Описание доступного kicad-cli для промптов (args.kicad_note); по умолчанию — как на Mac (KiCad 10.0.6).
+const KICAD_NOTE = (args && args.kicad_note) || `kicad-cli 10.0.6 доступен: ${KICAD_CLI} (fp upgrade, fp export svg) — можно использовать для проверки, что KiCad читает наши файлы.`
+const SKIP_SEXPR = !!(args && args.skip_sexpr)  // фазы Sexpr/Review-Sexpr уже выполнены — пропустить
 
 const COMMON = `
 Проект: kicadfp — библиотека и редактор файлов посадочных мест KiCad (.kicad_mod / .pretty) на Python.
-Репозиторий: ${REPO}. Python: ${PY} (venv, 3.12; pytest, pytest-cov, PySide6 установлены). Запуск тестов: cd ${REPO} && ${PY} -m pytest -q.
+Репозиторий: ${REPO}. Python: ${PY} (venv; pytest, pytest-cov, PySide6 установлены). Запуск тестов: cd ${REPO} && ${PY} -m pytest -q.
 ОБЯЗАТЕЛЬНО перед работой прочитай целиком ${REPO}/docs/dev/architecture.md — это контракт API, которому должен соответствовать твой код (имена классов/функций/атрибутов, семантика). Если контракт неполон — принимай решение, совместимое с духом контракта, и запиши его в docstring; если контракт противоречит фактам формата — следуй фактам и ОБЯЗАТЕЛЬНО опиши отклонение в финальном ответе.
 Спецификации форматов пишутся ПАРАЛЛЕЛЬНО другой группой агентов и могут ещё отсутствовать в docs/dev/ — если нужного .md нет, работай по исходникам KiCad, реальным файлам и docs/dev/token-inventory.json + layers.json (они уже есть); появившийся позже документ используй для сверки. Спецификации (прочитай те, что относятся к твоей задаче): ${REPO}/docs/dev/format-writer.md (порядок токенов writer'а KiCad по версиям), format-layout.md (раскладка пробелов: алгоритм Prettify 8/9 и таблица 6/7; содержит проверенный порт prettify на Python), format-tokens.md + token-inventory.json (все токены, примеры файлов), layers.md + layers.json (слои, цвета), legacy-mod.md (старый формат .mod), lab-generators.md (геометрия генераторов).
-Исходники KiCad для сверки: ${KSRC}/{6.0,7.0,8.0,9.0,master}. Реальные библиотеки: фикстуры ${REPO}/tests/fixtures/{kicad5,kicad6,kicad8,kicad9,kicad10dev,legacy_mod}, полные клоны ${KFP}/{v6.0.0,v7.0.0,v8.0.0,v9.0.0,master} (тысячи файлов; переменная KICADFP_EXTRA_FIXTURES для расширенного прогона, см. tests/conftest.py). kicad-cli 10.0.6 доступен: ${KICAD_CLI} (fp upgrade, fp export svg) — можно использовать для проверки, что KiCad читает наши файлы.
+Исходники KiCad для сверки: ${KSRC}/{6.0,7.0,8.0,9.0,master}. Реальные библиотеки: фикстуры ${REPO}/tests/fixtures/{kicad5,kicad6,kicad8,kicad9,kicad10dev,legacy_mod}, полные клоны ${KFP}/{v6.0.0,v7.0.0,v8.0.0,v9.0.0,master} (тысячи файлов; переменная KICADFP_EXTRA_FIXTURES для расширенного прогона, см. tests/conftest.py). ${KICAD_NOTE}
 Правила кода: Python >= 3.10, ядро (всё кроме kicadfp/gui и PNG) — ТОЛЬКО стандартная библиотека; идентификаторы английские, docstrings/комментарии/сообщения — на русском; type hints; from __future__ import annotations; без print в библиотечном коде; каждое публичное имя с docstring. Тесты — pytest, в ${REPO}/tests/, используют фикстуры из conftest.py. Не редактируй файлы, не относящиеся к твоей задаче (список ниже); если нужен фикс в чужом модуле — опиши в ответе, что и почему, а для своего модуля сделай обход. Не запускай git commit.
 Критерий готовности: все твои тесты проходят (${PY} -m pytest -q tests/<твои файлы>), и общий прогон ${PY} -m pytest -q не ломается из-за тебя. Финальный ответ — резюме: что сделано, отклонения от контракта, известные ограничения, что нужно другим модулям.
 `
@@ -81,8 +84,10 @@ async function reviewAndFix(scope, files, phaseName, rounds = 2) {
 }
 
 // ---------------- Phase 1: sexpr + format_rules (+ layers параллельно) ----------------
+let sexprResult = 'skipped', layersResult = 'skipped', rSexpr = 'skipped'
+if (!SKIP_SEXPR) {
 phase('Sexpr')
-const [sexprResult, layersResult] = await parallel([
+;[sexprResult, layersResult] = await parallel([
   () => agent(COMMON + `
 ЗАДАЧА: kicadfp/sexpr.py и kicadfp/format_rules.py УЖЕ РЕАЛИЗОВАНЫ (вместе с tests/test_sexpr.py и tests/test_roundtrip.py; все тесты проходят; round-trip на 12 191 файле полных клонов даёт 100 % равенство деревьев и байт-в-байт для файлов, записанных самим KiCad). Твоя роль — adversarial-ревьюер и «закалка» этих двух модулей: прочитай их целиком вместе с architecture.md §3–4, docs/dev/format-layout.md и format-writer.md (если уже появились), исходники Prettify (${KSRC}/9.0 и 8.0 kicad_io_utils.cpp), dsnlexer.cpp и richio.cpp (${KSRC}/9.0), writer 6.0/7.0 (pcb_plugin.cpp). Ищи РЕАЛЬНЫЕ дефекты: расхождения с DSNLEXER (что считается символом, экранирование, комментарии, CR/LF, BOM, «\\» в конце строки, пустые строки, вложенные скобки в строках), расхождения порта Prettify с C++ (сравни построчно), ошибки Node.set/insert/set_flag при вставке по таблице порядка (напиши тесты на все ветки: предшественники есть/нет, неизвестные узлы между ними, атомы после узлов), format_number на граничных значениях (сравни с выводом C printf через ctypes или с таблицей из numfmt_check.py в ${SCRATCH}/research/), equal/diff, производительность (профилируй parse на 1400 файлах kicad8; цель < 4 мс/файл; если можно ускорить в 2 раза без усложнения — сделай), полноту таблиц *_ORDER в format_rules.py против writer'а 9.0/8.0/7.0/6.0 (каждый токен, который пишет KiCad, должен быть в таблице в правильной позиции; сверь с docs/dev/token-inventory.json: все имена дочерних узлов footprint/pad/fp_text/property/fp_*/model из реальных файлов должны быть в KNOWN_FOOTPRINT_CHILDREN или соответствующих таблицах), пороги версий в profile_for (проверь по token-inventory.json/фикстурам: с какой версии uuid вместо tstamp, (hide yes), кавычки в layers, property вместо fp_text, stroke, generator_version; исправь пороги, если фактические данные противоречат). Всё найденное ИСПРАВЬ прямо в коде (минимально, не переписывая архитектуру и публичный API) и добавь регрессионные тесты в tests/test_sexpr.py / tests/test_format_rules.py (создай). Прогони tests/test_roundtrip.py и расширенный прогон KICADFP_EXTRA_FIXTURES="${KFP}/v8.0.0:${KFP}/v9.0.0:${KFP}/master:${KFP}/v7.0.0:${KFP}/v6.0.0" ${PY} -m pytest tests/test_roundtrip.py -q -m slow — ничего не должно сломаться. В ответе: список найденных дефектов (с доказательством) и что исправлено.
 Можно менять только: kicadfp/sexpr.py, kicadfp/format_rules.py, tests/test_sexpr.py, tests/test_format_rules.py, tests/test_roundtrip.py.`,
@@ -93,7 +98,8 @@ const [sexprResult, layersResult] = await parallel([
 ])
 
 phase('Review-Sexpr')
-const rSexpr = await reviewAndFix('sexpr', ['kicadfp/sexpr.py', 'kicadfp/format_rules.py', 'kicadfp/layers.py'], 'Review-Sexpr', 1)
+rSexpr = await reviewAndFix('sexpr', ['kicadfp/sexpr.py', 'kicadfp/format_rules.py', 'kicadfp/layers.py'], 'Review-Sexpr', 1)
+} else { log('Фазы Sexpr/Review-Sexpr пропущены (args.skip_sexpr)') }
 
 // ---------------- Phase 2: model + io ----------------
 phase('Model')

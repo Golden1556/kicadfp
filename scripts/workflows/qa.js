@@ -12,10 +12,11 @@ const REPO = (typeof args === 'object' && args && args.repo) || '/Users/juli/Des
 const PY = REPO + '/.venv/bin/python'
 const SCRATCH = REPO + '/.cache/scratch'
 const KFP = REPO + '/.cache/kfp'
-const KICAD_CLI = 'kicad-cli'  // локально на Mac: kicad-cli; в облаке — если установлен
+const KICAD_CLI = (args && args.kicad_cli) || 'kicad-cli'  // путь к kicad-cli (args.kicad_cli)
+const KICAD_NOTE = (args && args.kicad_note) || `kicad-cli 10.0.6: ${KICAD_CLI} (fp upgrade INPUT_DIR -o OUT_DIR читает .pretty и пересохраняет; fp export svg; ненулевой код/сообщения в stderr = KiCad не смог прочитать файл).`
 
 const COMMON = `
-Проект: kicadfp — библиотека и редактор файлов посадочных мест KiCad на Python (ТЗ: чтение/запись .kicad_mod KiCad 6–9 без потерь, модель, проверка, генераторы, CLI, GUI PySide6, конвертер .mod). Репозиторий ${REPO}, Python ${PY}; тесты: cd ${REPO} && QT_QPA_PLATFORM=offscreen ${PY} -m pytest -q; kicad-cli 10.0.6: ${KICAD_CLI} (fp upgrade INPUT_DIR -o OUT_DIR читает .pretty и пересохраняет; fp export svg; ненулевой код/сообщения в stderr = KiCad не смог прочитать файл). Полные клоны библиотек: ${KFP}/{v6.0.0,v7.0.0,v8.0.0,v9.0.0,master}. Контракт: docs/dev/architecture.md; спецификации: docs/dev/*.md. Правила кода: ядро без сторонних зависимостей, русские docstrings/сообщения, английские идентификаторы; не запускай git commit.
+Проект: kicadfp — библиотека и редактор файлов посадочных мест KiCad на Python (ТЗ: чтение/запись .kicad_mod KiCad 6–9 без потерь, модель, проверка, генераторы, CLI, GUI PySide6, конвертер .mod). Репозиторий ${REPO}, Python ${PY}; тесты: cd ${REPO} && QT_QPA_PLATFORM=offscreen ${PY} -m pytest -q; ${KICAD_NOTE} Полные клоны библиотек: ${KFP}/{v6.0.0,v7.0.0,v8.0.0,v9.0.0,master}. Контракт: docs/dev/architecture.md; спецификации: docs/dev/*.md. Правила кода: ядро без сторонних зависимостей, русские docstrings/сообщения, английские идентификаторы; не запускай git commit.
 `
 
 const SCENARIOS = `
