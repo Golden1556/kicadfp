@@ -1,0 +1,69 @@
+# EESchema Netlist Version 1.1 created  Ср 02.09.26 19:52:23
+(
+ ( /5C3DB359 snp8  X1 CONNECT {Lib=CONNECT}
+  (    1 GND )
+  (    2 /1 )
+  (    3 N-000001 )
+  (    4 /2 )
+  (    5 /3 )
+  (    6 N-000002 )
+  (    7 N-000007 )
+  (    8 Vcc )
+ )
+ ( /5C3DB35A dip14  DD1 K555TB6 {Lib=K555TB6}
+  (    1 /1 )
+  (    2 ? )
+  (    3 N-000006 )
+  (    4 /3 )
+  (    5 N-000007 )
+  (    6 ? )
+  (    7 GND )
+  (    8 /2 )
+  (    9 N-000002 )
+  (   10 N-000009 )
+  (   11 N-000006 )
+  (   12 N-000002 )
+  (   13 N-000001 )
+  (   14 Vcc )
+ )
+ ( /5C3DB35C mlt  R1 REZ {Lib=REZ}
+  (    1 GND )
+  (    2 N-000009 )
+ )
+)
+*
+{ Pin List by Nets
+Net 1 "" ""
+ X1 3
+ DD1 13
+Net 2 "" ""
+ X1 6
+ DD1 12
+ DD1 9
+Net 3 "GND" "GND"
+ X1 1
+ DD1 7
+ R1 1
+Net 4 "Vcc" "Vcc"
+ X1 8
+ DD1 14
+Net 6 "" ""
+ DD1 3
+ DD1 11
+Net 7 "" ""
+ X1 7
+ DD1 5
+Net 9 "" ""
+ DD1 10
+ R1 2
+Net 10 "/1" "1"
+ X1 2
+ DD1 1
+Net 11 "/2" "2"
+ X1 4
+ DD1 8
+Net 12 "/3" "3"
+ X1 5
+ DD1 4
+}
+#End

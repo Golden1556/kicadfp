@@ -1,0 +1,125 @@
+file lines=239 crlf_lines=238 comment_lines=1 index=True
+
+### dip14  (block lines=114, descr='Корпус К555ТВ6 DIP14', tags='dip14 K555TB6', attr=—)
+pads=14 texts=2 shapes=5 models=0
+
+| # | type | shape | at (mm) | size (mm) | drill | layers |
+|---|---|---|---|---|---|---|
+| "1" | thru_hole | rect | -3.74904 -7.50062 | 1.30048 1.30048 | 0.8001 | (layers "*.Cu" "*.Mask" "F.SilkS") |
+| "2" | thru_hole | circle | -3.74904 -5.00126 | 1.30048 1.30048 | 0.8001 | (layers "*.Cu" "*.Mask" "F.SilkS") |
+| "3" | thru_hole | circle | -3.74904 -2.49936 | 1.30048 1.30048 | 0.8001 | (layers "*.Cu" "*.Mask" "F.SilkS") |
+| "4" | thru_hole | circle | -3.74904 0 | 1.30048 1.30048 | 0.8001 | (layers "*.Cu" "*.Mask" "F.SilkS") |
+| "5" | thru_hole | circle | -3.74904 2.49936 | 1.30048 1.30048 | 0.8001 | (layers "*.Cu" "*.Mask" "F.SilkS") |
+| "6" | thru_hole | circle | -3.74904 5.00126 | 1.30048 1.30048 | 0.8001 | (layers "*.Cu" "*.Mask" "F.SilkS") |
+| "7" | thru_hole | circle | -3.74904 7.50062 | 1.30048 1.30048 | 0.8001 | (layers "*.Cu" "*.Mask" "F.SilkS") |
+| "8" | thru_hole | circle | 3.74904 7.50062 | 1.30048 1.30048 | 0.8001 | (layers "*.Cu" "*.Mask" "F.SilkS") |
+| "9" | thru_hole | circle | 3.74904 5.00126 | 1.30048 1.30048 | 0.8001 | (layers "*.Cu" "*.Mask" "F.SilkS") |
+| "10" | thru_hole | circle | 3.74904 2.49936 | 1.30048 1.30048 | 0.8001 | (layers "*.Cu" "*.Mask" "F.SilkS") |
+| "11" | thru_hole | circle | 3.74904 0 | 1.30048 1.30048 | 0.8001 | (layers "*.Cu" "*.Mask" "F.SilkS") |
+| "12" | thru_hole | circle | 3.74904 -2.49936 | 1.30048 1.30048 | 0.8001 | (layers "*.Cu" "*.Mask" "F.SilkS") |
+| "13" | thru_hole | circle | 3.74904 -5.00126 | 1.30048 1.30048 | 0.8001 | (layers "*.Cu" "*.Mask" "F.SilkS") |
+| "14" | thru_hole | circle | 3.74904 -7.50062 | 1.30048 1.30048 | 0.8001 | (layers "*.Cu" "*.Mask" "F.SilkS") |
+
+| T | text | at (mm) | angle | size h w (mm) | thickness | layer | flags |
+|---|---|---|---|---|---|---|---|
+| Reference | "REF**" | 0 -9.99998 | 0 | 1.00076 1.00076 | 0.14986 | F.SilkS | — |
+| Value | "VAL**" | 0 0 | 90 | 1.00076 1.00076 | 0.14986 | F.SilkS | — |
+
+| shape | start | mid/end | end | width | layer |
+|---|---|---|---|---|---|
+| fp_line | -2.49936 -8.7503 | | 2.49936 -8.7503 | 0.14986 | F.SilkS |
+| fp_line | 2.49936 -8.7503 | | 2.49936 8.7503 | 0.14986 | F.SilkS |
+| fp_line | 2.49936 8.7503 | | -2.49936 8.7503 | 0.14986 | F.SilkS |
+| fp_line | -2.49936 8.7503 | | -2.49936 -8.7503 | 0.14986 | F.SilkS |
+| fp_arc (DA angle -180, swapped=True, center 0 -8.7503) | -0.7493 -8.7503 | mid 0 -9.4996 | 0.7493 -8.7503 | 0.14986 | F.SilkS |
+
+### mlt  (block lines=31, descr='Корпус резистора МЛТ', tags='mlt resistor', attr=—)
+pads=2 texts=2 shapes=6 models=0
+
+| # | type | shape | at (mm) | size (mm) | drill | layers |
+|---|---|---|---|---|---|---|
+| "1" | thru_hole | rect | -5.00126 0 | 1.30048 1.30048 | 0.8001 | (layers "*.Cu" "*.Mask" "F.SilkS") |
+| "2" | thru_hole | circle | 5.00126 0 | 1.30048 1.30048 | 0.8001 | (layers "*.Cu" "*.Mask" "F.SilkS") |
+
+| T | text | at (mm) | angle | size h w (mm) | thickness | layer | flags |
+|---|---|---|---|---|---|---|---|
+| Reference | "REF**" | 0 -2.49936 | 0 | 1.00076 1.00076 | 0.14986 | F.SilkS | — |
+| Value | "VAL**" | 0 2.49936 | 0 | 1.00076 1.00076 | 0.14986 | F.SilkS | — |
+
+| shape | start | mid/end | end | width | layer |
+|---|---|---|---|---|---|
+| fp_line | -3.74904 -1.24968 | | 3.74904 -1.24968 | 0.14986 | F.SilkS |
+| fp_line | 3.74904 -1.24968 | | 3.74904 1.24968 | 0.14986 | F.SilkS |
+| fp_line | 3.74904 1.24968 | | -3.74904 1.24968 | 0.14986 | F.SilkS |
+| fp_line | -3.74904 1.24968 | | -3.74904 -1.24968 | 0.14986 | F.SilkS |
+| fp_line | -5.00126 0 | | -3.74904 0 | 0.14986 | F.SilkS |
+| fp_line | 3.74904 0 | | 5.00126 0 | 0.14986 | F.SilkS |
+
+### snp8  (block lines=85, descr='Корпус разъёма СНП 8 контактов с двумя монтажными отверстиями 3 мм', tags='snp8 connector', attr=—)
+pads=10 texts=2 shapes=4 models=0
+
+| # | type | shape | at (mm) | size (mm) | drill | layers |
+|---|---|---|---|---|---|---|
+| "1" | thru_hole | rect | -2.49936 -3.74904 | 1.30048 1.30048 | 0.8001 | (layers "*.Cu" "*.Mask" "F.SilkS") |
+| "2" | thru_hole | circle | -2.49936 -1.24968 | 1.30048 1.30048 | 0.8001 | (layers "*.Cu" "*.Mask" "F.SilkS") |
+| "3" | thru_hole | circle | -2.49936 1.24968 | 1.30048 1.30048 | 0.8001 | (layers "*.Cu" "*.Mask" "F.SilkS") |
+| "4" | thru_hole | circle | -2.49936 3.74904 | 1.30048 1.30048 | 0.8001 | (layers "*.Cu" "*.Mask" "F.SilkS") |
+| "5" | thru_hole | circle | 2.49936 -3.74904 | 1.30048 1.30048 | 0.8001 | (layers "*.Cu" "*.Mask" "F.SilkS") |
+| "6" | thru_hole | circle | 2.49936 -1.24968 | 1.30048 1.30048 | 0.8001 | (layers "*.Cu" "*.Mask" "F.SilkS") |
+| "7" | thru_hole | circle | 2.49936 1.24968 | 1.30048 1.30048 | 0.8001 | (layers "*.Cu" "*.Mask" "F.SilkS") |
+| "8" | thru_hole | circle | 2.49936 3.74904 | 1.30048 1.30048 | 0.8001 | (layers "*.Cu" "*.Mask" "F.SilkS") |
+| "" | np_thru_hole | circle | 8.7503 -9.99998 | 2.99974 2.99974 | 2.99974 | (layers "*.Mask" "B.Cu" "F.SilkS") |
+| "" | np_thru_hole | circle | 8.7503 9.99998 | 2.99974 2.99974 | 2.99974 | (layers "*.Mask" "B.Cu" "F.SilkS") |
+
+| T | text | at (mm) | angle | size h w (mm) | thickness | layer | flags |
+|---|---|---|---|---|---|---|---|
+| Reference | "REF**" | 8.7503 -13.74902 | 0 | 1.00076 1.00076 | 0.14986 | F.SilkS | — |
+| Value | "VAL**" | 8.7503 13.74902 | 0 | 1.00076 1.00076 | 0.14986 | F.SilkS | — |
+
+| shape | start | mid/end | end | width | layer |
+|---|---|---|---|---|---|
+| fp_line | 2.49936 -12.49934 | | 15.00124 -12.49934 | 0.14986 | F.SilkS |
+| fp_line | 15.00124 -12.49934 | | 15.00124 12.49934 | 0.14986 | F.SilkS |
+| fp_line | 15.00124 12.49934 | | 2.49936 12.49934 | 0.14986 | F.SilkS |
+| fp_line | 2.49936 12.49934 | | 2.49936 -12.49934 | 0.14986 | F.SilkS |
+
+### checks
+512 deci-mil -> 1300480 nm -> 1.30048 mm  OK
+315 deci-mil -> 800100 nm -> 0.8001 mm  OK
+984 deci-mil -> 2499360 nm -> 2.49936 mm  OK
+1476 deci-mil -> 3749040 nm -> 3.74904 mm  OK
+3937 deci-mil -> 9999980 nm -> 9.99998 mm  OK
+394 deci-mil -> 1000760 nm -> 1.00076 mm  OK
+59 deci-mil -> 149860 nm -> 0.14986 mm  OK
+3445 deci-mil -> 8750300 nm -> 8.7503 mm  OK
+295 deci-mil -> 749300 nm -> 0.7493 mm  OK
+1181 deci-mil -> 2999740 nm -> 2.99974 mm  OK
+1969 deci-mil -> 5001260 nm -> 5.00126 mm  OK
+2953 deci-mil -> 7500620 nm -> 7.50062 mm  OK
+5906 deci-mil -> 15001240 nm -> 15.00124 mm  OK
+492 deci-mil -> 1249680 nm -> 1.24968 mm  OK
+5413 deci-mil -> 13749020 nm -> 13.74902 mm  OK
+4921 deci-mil -> 12499340 nm -> 12.49934 mm  OK
+
+### masks
+00E0FFFF: 35 layers -> (layers "*.Cu" "*.Mask" "F.SilkS")
+00808000: 2 layers -> (layers "F.Cu" "F.Mask")
+00888000: 3 layers -> (layers "F.Cu" "F.Mask" "F.Paste")
+00E00001: 4 layers -> (layers "*.Mask" "B.Cu" "F.SilkS")
+0000FFFF: 32 layers -> (layers "*.Cu")
+00008001: 2 layers -> (layers "*.Cu")
+00C08000: 3 layers -> (layers "*.Mask" "F.Cu")
+
+### arc examples
+center=(0, -3445) start=(295, -3445) angle=-180.0: start=(-295, -3445) mid=(0, -3740) end=(295, -3445) arc_angle=180.0 swapped=True
+center=(0, -3445) start=(295, -3445) angle=180.0: start=(295, -3445) mid=(0, -3150) end=(-295, -3445) arc_angle=180.0 swapped=False
+center=(0, 0) start=(1000, 0) angle=90.0: start=(1000, 0) mid=(707, 707) end=(0, 1000) arc_angle=90.0 swapped=False
+center=(0, 0) start=(1000, 0) angle=-90.0: start=(0, -1000) mid=(707, -707) end=(1000, 0) arc_angle=90.0 swapped=True
+center=(0, 0) start=(1000, 0) angle=45.0: start=(1000, 0) mid=(924, 383) end=(707, 707) arc_angle=45.0 swapped=False
+center=(0, 0) start=(1000, 0) angle=360.0: start=(1000, 0) mid=(-1000, 0) end=(1000, 0) arc_angle=360.0 swapped=False
+
+### inner copper mapping (cu_count=16)
+0->B.Cu, 1->In14.Cu, 2->In13.Cu, 3->In12.Cu, 4->In11.Cu, 5->In10.Cu, 6->In9.Cu, 7->In8.Cu, 8->In7.Cu, 9->In6.Cu, 10->In5.Cu, 11->In4.Cu, 12->In3.Cu, 13->In2.Cu, 14->In1.Cu, 15->F.Cu
+
+### text layer mapping
+16->B.Adhes, 17->F.Adhes, 18->B.Paste, 19->F.Paste, 20->B.SilkS, 21->F.SilkS, 22->B.Mask, 23->F.Mask, 24->Dwgs.User, 25->Cmts.User, 26->Eco1.User, 27->Eco2.User, 28->Edge.Cuts

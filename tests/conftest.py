@@ -1,0 +1,105 @@
+"""Общие фикстуры pytest для kicadfp.
+
+Каталоги фикстур (tests/fixtures/<версия>/<библиотека>.pretty/*.kicad_mod):
+  kicad5     — формат KiCad 5 (корень ``module``), из kicad-footprints 6.0.0
+  kicad6     — формат KiCad 6 (version 20211014), из kicad-footprints 7.0.0
+  kicad8     — формат KiCad 8 (version 20240108), пять библиотек из ТЗ целиком
+  kicad9     — формат KiCad 9 (version 20240108/20241229), из kicad-footprints 9.0.0
+  kicad10dev — формат KiCad 10-dev (version 20260206), из kicad-footprints master
+  legacy_mod — старый формат PCBNEW-LibModule-V1
+
+Переменные окружения:
+  KICADFP_EXTRA_FIXTURES — список каталогов через ``os.pathsep`` с дополнительными
+      .pretty (полные клоны библиотек) для расширенного прогона round-trip;
+  KICAD_CLI — путь к kicad-cli; при отсутствии тесты с маркером ``kicad_cli`` пропускаются.
+"""
+
+from __future__ import annotations
+
+import os
+import shutil
+from pathlib import Path
+
+import pytest
+
+FIXTURES = Path(__file__).parent / "fixtures"
+# special/<версия> — файлы с редкими конструкциями (zone, group, custom pads, chamfer, …)
+VERSION_DIRS = ("kicad5", "kicad6", "kicad8", "kicad9", "kicad10dev",
+                "special/kicad5", "special/kicad6", "special/kicad8", "special/kicad9",
+                "special/kicad10dev")
+PRETTIFY_DIRS = ("kicad8", "kicad9", "kicad10dev", "special/kicad8", "special/kicad9",
+                 "special/kicad10dev")  # файлы, записанные Prettify -> байт в байт
+LEGACY_LAYOUT_DIRS = ("kicad5", "kicad6", "special/kicad5", "special/kicad6")
+
+
+def fixture_files(*dirs: str) -> list[Path]:
+    """Все ``*.kicad_mod`` в указанных каталогах версий (отсортированно)."""
+    out: list[Path] = []
+    for d in dirs or VERSION_DIRS:
+        out.extend(sorted((FIXTURES / d).rglob("*.kicad_mod")))
+    return out
+
+
+def extra_fixture_files() -> list[Path]:
+    extra = os.environ.get("KICADFP_EXTRA_FIXTURES", "")
+    out: list[Path] = []
+    for d in filter(None, extra.split(os.pathsep)):
+        out.extend(sorted(Path(d).rglob("*.kicad_mod")))
+    return out
+
+
+def _ids(paths: list[Path]) -> list[str]:
+    return [str(p.relative_to(FIXTURES)) if FIXTURES in p.parents else str(p) for p in paths]
+
+
+ALL_FILES = fixture_files()
+PRETTIFY_FILES = fixture_files(*PRETTIFY_DIRS)
+
+
+@pytest.fixture(params=ALL_FILES, ids=_ids(ALL_FILES))
+def any_fixture(request) -> Path:
+    """Каждый файл-фикстура всех версий."""
+    return request.param
+
+
+@pytest.fixture(params=PRETTIFY_FILES, ids=_ids(PRETTIFY_FILES))
+def prettify_fixture(request) -> Path:
+    """Файлы, записанные KiCad 8+ (стиль Prettify) — ожидается совпадение байт в байт."""
+    return request.param
+
+
+@pytest.fixture
+def dip14_v8() -> Path:
+    return FIXTURES / "kicad8" / "Package_DIP.pretty" / "DIP-14_W7.62mm.kicad_mod"
+
+
+@pytest.fixture
+def dip14_v6() -> Path:
+    return FIXTURES / "kicad6" / "Package_DIP.pretty" / "DIP-14_W7.62mm.kicad_mod"
+
+
+@pytest.fixture
+def dip14_v5() -> Path:
+    return FIXTURES / "kicad5" / "Package_DIP.pretty" / "DIP-14_W7.62mm.kicad_mod"
+
+
+@pytest.fixture
+def legacy_mod() -> Path:
+    return FIXTURES / "legacy_mod" / "My_lib.mod"
+
+
+@pytest.fixture
+def kicad_cli() -> str:
+    """Путь к kicad-cli или skip."""
+    cli = os.environ.get("KICAD_CLI") or shutil.which("kicad-cli")
+    if not cli or not Path(cli).exists():
+        pytest.skip("kicad-cli не найден (задайте KICAD_CLI)")
+    return cli
+
+
+@pytest.fixture
+def tmp_lib(tmp_path: Path) -> Path:
+    """Пустой каталог временной библиотеки ``tmp.pretty``."""
+    d = tmp_path / "tmp.pretty"
+    d.mkdir()
+    return d

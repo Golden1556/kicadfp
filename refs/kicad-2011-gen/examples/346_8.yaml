@@ -1,0 +1,177 @@
+# Лабораторные РГРТУ «САПР печатных плат KiCAD» (Сапрыкин, Тобратов), бригада 346_8.
+# Лаб. 1 — библиотека из 5 символов (таблицы 1–3, рис. 9а–13), лаб. 3 — схема по рис. 6.
+# Все размеры в мм (как в методичке); точки подключения снапятся к сетке 50 мил
+# (5 мм ≈ 200 мил = 4 клетки — методичка это явно разрешает).
+project: "346_8"
+units: mm
+grid: 50
+crlf: true
+
+library:
+  name: My_lib                    # ТЗ §4: библиотека символов My_lib в каталоге проекта
+  components:
+    # --- JK-триггер К555ТВ6 (рис. 9а, таблица 1) --------------------------------
+    - name: K555TB6
+      kind: box
+      reference: DD
+      units: 2
+      value_visible: false          # «Поле Value сделайте невидимым»
+      description: JK-триггер К555ТВ6, 2 секции в корпусе DIP14
+      keywords: JK trigger K555TB6 74LS
+      footprint: dip14              # поле F2 — как после Cvpcb (ЛР 4), попадает в .net
+      width: 20                     # 5 + 10 + 5 мм
+      height: 25
+      dividers: [-5, 5]             # вертикальные линии на 5 мм от краёв
+      pin_length: 5
+      pitch: 5
+      text_size: 2
+      pin_name_offset: 40mil
+      texts:
+        - {text: T, at: [0, 10], size: 2}
+      pins:
+        # секция A (unit 1)
+        - {name: J,  number: 1,  side: left,  type: input,  unit: 1}
+        - {name: C,  number: 12, side: left,  type: input,  unit: 1}
+        - {name: K,  number: 4,  side: left,  type: input,  unit: 1}
+        - {name: R,  number: 13, side: left,  type: input,  unit: 1}
+        - {name: Q,  number: 3,  side: right, type: output, unit: 1, row: 0}
+        - {name: "~Q", number: 2, side: right, type: output, unit: 1, shape: inverted, row: 3}
+        # секция B (unit 2) — другие номера выводов
+        - {name: J,  number: 8,  side: left,  type: input,  unit: 2}
+        - {name: C,  number: 9,  side: left,  type: input,  unit: 2}
+        - {name: K,  number: 11, side: left,  type: input,  unit: 2}
+        - {name: R,  number: 10, side: left,  type: input,  unit: 2}
+        - {name: Q,  number: 5,  side: right, type: output, unit: 2, row: 0}
+        - {name: "~Q", number: 6, side: right, type: output, unit: 2, shape: inverted, row: 3}
+        # питание: общие (unit 0), невидимые, «Вход питания»
+        # точка подключения сдвинута в правое поле корпуса (x = +5 клеток), чтобы в libedit
+        # надписи скрытых выводов не ложились на текст «T» и на обозначение DD
+        - {name: Vcc, number: 14, side: top,    type: power_in, unit: 0, visible: false, at: [6.35, 17.78]}
+        - {name: GND, number: 7,  side: bottom, type: power_in, unit: 0, visible: false, at: [6.35, -17.78]}
+
+    # --- резистор (рис. 10а, таблица 2) --------------------------------------------
+    - name: REZ
+      kind: two_pin
+      reference: R
+      value_visible: false
+      description: Резистор (символ по ГОСТ), корпус mlt
+      keywords: resistor rez R
+      footprint: mlt
+      width: 10                     # корпус 10 × 4 мм, общая длина 20 мм
+      height: 4
+      pin_length: 5
+      text_size: 2
+      pins:
+        - {name: 1, number: 1, type: bidi}
+        - {name: 2, number: 2, type: bidi}
+
+    # --- разъём (рис. 11а, таблица 3) ------------------------------------------------
+    - name: CONNECT
+      kind: table
+      reference: X
+      value_visible: false
+      description: Разъём 8 контактов (таблица Net/Pin), корпус snp8
+      keywords: connector connect X
+      footprint: snp8
+      width: 35
+      net_col_width: 25
+      row_height: 7.5
+      pin_length: 5
+      pin_type: bidi
+      text_size: 2
+      rows:
+        - [GND, 1]
+        - ["", 2]
+        - ["", 3]
+        - ["", 4]
+        - ["", 5]
+        - ["", 6]
+        - ["", 7]
+        - [Vcc, 8]
+
+    # --- «земля» (рис. 12) ---------------------------------------------------------------
+    - name: GND
+      kind: power
+      reference: "#PWR"
+      style: gnd
+      value_visible: false
+      description: Символ питания «земля»
+      keywords: power gnd
+      pin_length: 5                 # ТЗ 1.3а: вывод 4 клетки вниз к черте (вывод невидим — см. conventions)
+      bar: 8                        # черта 6 клеток, жирная
+      bar_width: 20mil
+      height: 5
+
+    # --- «питание» (рис. 13) -------------------------------------------------------------
+    - name: VCC
+      kind: power
+      reference: "#PWR"
+      net: Vcc
+      style: vcc
+      value_visible: false
+      description: Символ питания Vcc
+      keywords: power vcc
+      pin_length: 5                 # вывод 4 клетки
+      bar: 8                        # галка: ширина 6 клеток (±3)
+      bar_width: 20mil              # плечи жирные, как черта земли (рис. 13)
+      height: 5                     # ножка вниз до вершины 4 клетки
+      arm_height: 5                 # плечи от вершины вверх на 4 клетки: концы в (±3, +4) — на уровне точки подключения
+
+# --- Лаб. 2: библиотека корпусов My_lib.mod (ТЗ §3.2, сетка 1,25 мм, площадки 1,3 мм / сверло 0,8 мм) ---
+pad_defaults: {size: 1.3, drill: 0.8}     # в .pro: PadDimH/PadDimV/PadDrlX (ТЗ §1.5)
+footprints:
+  - {name: dip14, kind: dip, pins: 14, pitch: 2.5, rows: 7.5, body_w: 5.0,
+     description: Корпус К555ТВ6 DIP14, keywords: dip14 K555TB6}
+  - {name: mlt, kind: two_pad, spacing: 10.0, body_w: 7.5, body_h: 2.5,
+     description: Корпус резистора МЛТ, keywords: mlt resistor}
+  - {name: snp8, kind: pin_rows, rows: 2, per_row: 4, pitch: 2.5, row_gap: 5.0, body_w: 12.5, body_h: 25.0, hole: 3.0,
+     description: Корпус разъёма СНП 8 контактов с двумя монтажными отверстиями 3 мм, keywords: snp8 connector}
+
+# --- Лаб. 3: схема по рис. 6 ----------------------------------------------------------------
+# Координаты листа в мм (Y вниз). Точки провода задаются относительно выводов:
+#   "X1.2" — точка подключения вывода; "x=100" — сдвиг по X от предыдущей точки;
+#   {ref: DD1.13, x: 125} — Y вывода 13, X = 125 мм.
+schematic:
+  page: A4
+  title: "Лабораторная работа 3, бригада 346_8"
+  place:
+    - {ref: X1,  lib: CONNECT, at: [40, 80]}
+    - {ref: DD1, lib: K555TB6, unit: 1, at: [160, 50]}
+    - {ref: DD1, lib: K555TB6, unit: 2, at: [160, 110]}
+    - {ref: R1,  lib: REZ,     at: [125, 128.5]}
+    - {ref: "#PWR01", lib: GND, at: [70, 55],   orientation: 180}   # черта сверху, у X1.1
+    - {ref: "#PWR02", lib: GND, at: [110, 140]}                      # у R1
+    - {ref: "#PWR03", lib: VCC, at: [55, 130], orientation: 90}      # «галка» «<» у X1.8, раструбом к проводу (рис. 6)
+  buses:
+    - [[105, 30], [105, 140]]
+  bus_entries:
+    - {from_bus: 105, to: {ref: X1.2, x: 100}}     # «1» слева
+    - {from_bus: 105, to: {ref: X1.4, x: 100}}     # «2»
+    - {from_bus: 105, to: {ref: X1.5, x: 100}}     # «3»
+    - {from_bus: 105, to: {ref: DD1.1, x: 110}}    # «1» справа
+    - {from_bus: 105, to: {ref: DD1.4, x: 110}}    # «3»
+    - {from_bus: 105, to: {ref: DD1.8, x: 110}}    # «2»
+  connect:
+    - [X1.1, x=70, "#PWR01.1"]                     # GND -> символ земли (черта сверху)
+    - [X1.2, x=100]                                # J1 -> шина, метка 1
+    - [X1.4, x=100]                                # J2 -> шина, метка 2
+    - [X1.5, x=100]                                # K1 -> шина, метка 3
+    - [{ref: DD1.1, x: 110}, DD1.1]                # шина -> J (метка 1)
+    - [{ref: DD1.4, x: 110}, DD1.4]                # шина -> K (метка 3)
+    - [{ref: DD1.8, x: 110}, DD1.8]                # шина -> J секции B (метка 2)
+    - [X1.3, x=125, {ref: DD1.13, x: 125}, DD1.13]           # R -> DD1.1 R
+    - [X1.6, x=115, {ref: DD1.12, x: 115}, DD1.12]           # C -> DD1.1 C
+    - [{ref: X1.6, x: 115}, {ref: DD1.9, x: 115}, DD1.9]     # ... и DD1.2 C (junction на пересечении)
+    - [DD1.3, x=185, y=80, x=130, {ref: DD1.11, x: 130}, DD1.11]      # Q1 -> K2
+    - [DD1.5, x=185, y=150, x=90, {ref: X1.7, x: 90}, X1.7]           # Q2 -> OUT
+    - [DD1.10, R1.2]                               # R2 -> R1
+    - [R1.1, x=110, "#PWR02.1"]                    # R1 -> земля
+    - [X1.8, x=65, {ref: "#PWR03.1", x: 65}, "#PWR03.1"]     # Vcc -> символ питания
+  labels:
+    - {text: "1", at: {ref: X1.2, x: 90}}
+    - {text: "2", at: {ref: X1.4, x: 90}}
+    - {text: "3", at: {ref: X1.5, x: 90}}
+    - {text: "1", at: {ref: DD1.1, x: 112}}
+    - {text: "3", at: {ref: DD1.4, x: 112}}
+    - {text: "2", at: {ref: DD1.8, x: 112}}
+  noconnect: [DD1.2, DD1.6]             # ~Q обеих секций на рис. 6 никуда не подключены

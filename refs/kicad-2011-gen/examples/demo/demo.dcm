@@ -1,0 +1,17 @@
+EESchema-DOCLIB  Version 2.0  Date: Ср 02.09.26 19:52:23
+#
+$CMP C
+D Capacitor
+K cap capacitor
+$ENDCMP
+#
+$CMP CLKIN
+D Clock buffer with clock-shaped inputs
+$ENDCMP
+#
+$CMP NAND2
+D 2-input NAND with DeMorgan alternate body
+K nand logic 74xx
+$ENDCMP
+#
+#End Doc Library

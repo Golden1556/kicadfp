@@ -1,0 +1,62 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kicadfp"
+dynamic = ["version"]
+description = "Библиотека и редактор файлов посадочных мест KiCad (.kicad_mod, .pretty) на Python"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Хорьков К. А." }]
+keywords = ["kicad", "footprint", "pcb", "eda", "s-expression"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Education",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Electronic Design Automation (EDA)",
+]
+dependencies = []
+
+[project.optional-dependencies]
+gui = ["PySide6>=6.5"]
+png = ["PySide6>=6.5"]
+dev = ["pytest>=7", "pytest-cov", "pytest-qt", "PySide6>=6.5"]
+
+[project.scripts]
+kicadfp = "kicadfp.cli:main"
+kicadfp-gui = "kicadfp.gui:main"
+
+[project.urls]
+Homepage = "https://github.com/kicadfp/kicadfp"
+
+[tool.setuptools]
+packages = ["kicadfp", "kicadfp.generators", "kicadfp.gui"]
+
+[tool.setuptools.dynamic]
+version = { attr = "kicadfp._version.__version__" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+markers = [
+    "gui: тесты графического интерфейса (PySide6, offscreen)",
+    "kicad_cli: тесты, требующие установленный kicad-cli",
+    "slow: длительные тесты (полный прогон round-trip)",
+]
+
+[tool.coverage.run]
+source = ["kicadfp"]
+omit = ["kicadfp/gui/*"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false

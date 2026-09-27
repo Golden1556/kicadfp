@@ -1,0 +1,147 @@
+# Синтетический проект: покрывает остальные возможности формата.
+# DeMorgan (convert 2), дуги/окружности/Безье, пользовательские поля, алиасы,
+# фильтр посадочных мест, глобальные метки, иерархический лист, повороты и зеркала.
+project: "demo"
+units: mil
+grid: 50
+
+library:
+  components:
+    - name: NAND2
+      kind: raw
+      reference: DD
+      units: 4
+      description: 2-input NAND with DeMorgan alternate body
+      keywords: nand logic 74xx
+      aliases: [NAND2A]
+      footprints: [DIP14*, SO14*]
+      fields:
+        - {id: 0, text: DD, at: [0, 350], size: 60}
+        - {id: 1, text: NAND2, at: [0, -350], size: 60}
+        - {id: 4, text: "74LS00", at: [0, -450], size: 50, visible: false, name: Part}
+      draw:
+        # обычный стиль (convert 1): прямоугольник с «&»
+        - {rect: [[-250, 250], [250, -250]], convert: 1, fill: bg}
+        - {text: "&", at: [0, 150], size: 80, convert: 1}
+        # DeMorgan (convert 2): «OR с инверсными входами» — дуга + окружности
+        - {arc: {at: [-150, 0], r: 250, start: -50, end: 50}, convert: 2}
+        - {line: [[-150, 250], [-150, -250]], convert: 2}
+        - {bezier: [[-150, 250], [100, 250], [250, 0], [100, -250]], convert: 2}
+        - {circle: {at: [-330, 100], r: 30}, convert: 2}
+        - {circle: {at: [-330, -100], r: 30}, convert: 2}
+        - {pin: {name: A, number: 1, at: [-500, 100], side: left, type: input, unit: 1, convert: 1, length: 250}}
+        - {pin: {name: B, number: 2, at: [-500, -100], side: left, type: input, unit: 1, convert: 1, length: 250}}
+        - {pin: {name: Y, number: 3, at: [500, 0], side: right, type: output, unit: 1, convert: 1, length: 250, shape: inverted}}
+        - {pin: {name: A, number: 1, at: [-500, 100], side: left, type: input, unit: 1, convert: 2, length: 140, shape: inverted}}
+        - {pin: {name: B, number: 2, at: [-500, -100], side: left, type: input, unit: 1, convert: 2, length: 140, shape: inverted}}
+        - {pin: {name: Y, number: 3, at: [500, 0], side: right, type: output, unit: 1, convert: 2, length: 250}}
+        - {pin: {name: A, number: 4, at: [-500, 100], side: left, type: input, unit: 2, convert: 2, length: 140, shape: inverted}}
+        - {pin: {name: B, number: 5, at: [-500, -100], side: left, type: input, unit: 2, convert: 2, length: 140, shape: inverted}}
+        - {pin: {name: Y, number: 6, at: [500, 0], side: right, type: output, unit: 2, convert: 2, length: 250}}
+        - {pin: {name: A, number: 9, at: [-500, 100], side: left, type: input, unit: 3, convert: 2, length: 140, shape: inverted}}
+        - {pin: {name: B, number: 10, at: [-500, -100], side: left, type: input, unit: 3, convert: 2, length: 140, shape: inverted}}
+        - {pin: {name: Y, number: 8, at: [500, 0], side: right, type: output, unit: 3, convert: 2, length: 250}}
+        - {pin: {name: A, number: 12, at: [-500, 100], side: left, type: input, unit: 4, convert: 2, length: 140, shape: inverted}}
+        - {pin: {name: B, number: 13, at: [-500, -100], side: left, type: input, unit: 4, convert: 2, length: 140, shape: inverted}}
+        - {pin: {name: Y, number: 11, at: [500, 0], side: right, type: output, unit: 4, convert: 2, length: 250}}
+        - {pin: {name: A, number: 4, at: [-500, 100], side: left, type: input, unit: 2, convert: 1, length: 250}}
+        - {pin: {name: B, number: 5, at: [-500, -100], side: left, type: input, unit: 2, convert: 1, length: 250}}
+        - {pin: {name: Y, number: 6, at: [500, 0], side: right, type: output, unit: 2, convert: 1, length: 250, shape: inverted}}
+        - {pin: {name: A, number: 9, at: [-500, 100], side: left, type: input, unit: 3, convert: 1, length: 250}}
+        - {pin: {name: B, number: 10, at: [-500, -100], side: left, type: input, unit: 3, convert: 1, length: 250}}
+        - {pin: {name: Y, number: 8, at: [500, 0], side: right, type: output, unit: 3, convert: 1, length: 250, shape: inverted}}
+        - {pin: {name: A, number: 12, at: [-500, 100], side: left, type: input, unit: 4, convert: 1, length: 250}}
+        - {pin: {name: B, number: 13, at: [-500, -100], side: left, type: input, unit: 4, convert: 1, length: 250}}
+        - {pin: {name: Y, number: 11, at: [500, 0], side: right, type: output, unit: 4, convert: 1, length: 250, shape: inverted}}
+        - {pin: {name: VCC, number: 14, at: [0, 450], side: top, type: power_in, unit: 0, convert: 0, length: 200, visible: false}}
+        - {pin: {name: GND, number: 7, at: [0, -450], side: bottom, type: power_in, unit: 0, convert: 0, length: 200, visible: false}}
+
+    - name: C
+      kind: raw
+      reference: C
+      description: Capacitor
+      keywords: cap capacitor
+      fields:
+        - {id: 0, text: C, at: [100, 100]}
+        - {id: 1, text: C, at: [100, -100]}
+      draw:
+        - {line: [[-30, 100], [-30, -100]], width: 20}
+        - {line: [[30, 100], [30, -100]], width: 20}
+        - {pin: {name: "~", number: 1, at: [-200, 0], side: left, type: passive, length: 170}}
+        - {pin: {name: "~", number: 2, at: [200, 0], side: right, type: passive, length: 170}}
+
+    - name: CLKIN
+      kind: box
+      reference: DD
+      description: Clock buffer with clock-shaped inputs
+      width: 600
+      height: 400
+      pin_length: 200
+      pitch: 100
+      pins:
+        - {name: CLK, number: 1, side: left, type: input, shape: clock}
+        - {name: "~EN", number: 2, side: left, type: input, shape: input_low}
+        - {name: OUT, number: 3, side: right, type: output, shape: output_low}
+        - {name: "~OE", number: 4, side: bottom, type: input, shape: falling_edge}
+        - {name: NC, number: 5, side: top, type: nc, shape: nonlogic}
+
+    - name: VCC
+      kind: power
+      reference: "#PWR"
+      style: bar_up
+      net: VCC
+      bar: 200
+      height: 150
+    - name: GND
+      kind: power
+      reference: "#PWR"
+      style: gnd
+      bar: 300
+      height: 150
+
+schematic:
+  page: A3
+  title: "Demo of every schematic item"
+  date: "2011-04-29"
+  rev: "A"
+  company: "RSREU"
+  comments: ["comment 1", "", "", "comment 4 \"quoted\""]
+  place:
+    - {ref: DD1, lib: NAND2, unit: 1, at: [3000, 2000]}
+    - {ref: DD1, lib: NAND2, unit: 2, at: [3000, 3000]}
+    - {ref: DD3, lib: NAND2, unit: 1, at: [3000, 5000], convert: 2}      # DeMorgan-стиль
+    - {ref: DD1, lib: NAND2, unit: 3, at: [5000, 2000], orientation: 90}
+    - {ref: DD1, lib: NAND2, unit: 4, at: [5000, 3500], orientation: 0MY}
+    - {ref: C1, lib: C, at: [7000, 2500], orientation: 270}
+    - {ref: DD2, lib: CLKIN, at: [7000, 4500], orientation: 180MX,
+       fields: [{id: 4, name: Note, text: "buffer", at: [7000, 5200]}]}
+    - {ref: "#PWR01", lib: VCC, at: [2000, 1000]}
+    - {ref: "#PWR02", lib: GND, at: [2000, 4500]}
+  wires:
+    - [[2000, 1000], [2000, 1900], [2500, 1900]]
+  connect:
+    - [DD1.3, x=4000, DD1.9]
+    - [DD1.6, x=4000, y=3400, DD1.12]
+    - [DD1.1, x=2500, "#PWR01.1"]
+    - [DD1.5, x=2000, "#PWR02.1"]
+    - [C1.1, x=6000, y=2500, DD1.8]
+  buses:
+    - [[8500, 1000], [8500, 4000]]
+  bus_entries:
+    - {at: [8500, 1500], to: [100, 100]}
+    - {at: [8500, 2500], to: [-100, 100]}
+  labels:
+    - {text: "DATA[0..7]", at: [8500, 1000], kind: local, orient: 1}
+    - {text: "DATA0", at: [8600, 1600], kind: local}
+    - {text: "CLK_IN", at: [4000, 2000], kind: global, shape: Input}
+    - {text: "TO_SUB", at: [9000, 3000], kind: hier, shape: Output, orient: 2}
+    - {text: "Demo schematic\nsecond line", at: [1000, 6000], kind: note, size: 80}
+  noconnect: [DD1.2, DD1.4]
+  sheets:
+    - name: sub
+      file: sub.sch
+      at: [10000, 2500]
+      size: [1500, 1000]
+      pins:
+        - {name: TO_SUB, shape: Input, side: L, at: [10000, 3000]}
+        - {name: OUT, shape: Output, side: R, at: [11500, 3200]}

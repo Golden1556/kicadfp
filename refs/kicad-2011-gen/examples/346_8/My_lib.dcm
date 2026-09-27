@@ -1,0 +1,28 @@
+EESchema-DOCLIB  Version 2.0  Date: Ср 02.09.26 19:52:23
+#
+$CMP CONNECT
+D Разъём 8 контактов (таблица Net/Pin), корпус snp8
+K connector connect X
+$ENDCMP
+#
+$CMP GND
+D Символ питания «земля»
+K power gnd
+$ENDCMP
+#
+$CMP K555TB6
+D JK-триггер К555ТВ6, 2 секции в корпусе DIP14
+K JK trigger K555TB6 74LS
+$ENDCMP
+#
+$CMP REZ
+D Резистор (символ по ГОСТ), корпус mlt
+K resistor rez R
+$ENDCMP
+#
+$CMP VCC
+D Символ питания Vcc
+K power vcc
+$ENDCMP
+#
+#End Doc Library
