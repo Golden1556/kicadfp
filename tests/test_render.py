@@ -454,3 +454,78 @@ def test_render_all_kicad8_and_special_fixtures() -> None:
         except Exception as exc:  # noqa: BLE001
             failures.append(f"{path}: {type(exc).__name__}: {exc}")
     assert not failures, "\n".join(failures[:20])
+
+
+# ---------------------------------------------------------------------------
+# Редкие формы токенов и вырожденные случаи
+# ---------------------------------------------------------------------------
+
+_RARE = '''(footprint "RARE" (version 20240108) (generator "pcbnew") (layer "F.Cu")
+  (pad "1" smd hexagon (at 1 2) (size 2 1) (layers "F.Cu"))
+  (fp_curve (pts (xy 0 0) (xy 1 1)) (stroke (width 0.1) (type solid)) (layer "F.SilkS"))
+  (fp_poly (pts) (stroke (width 0.1) (type solid)) (fill none) (layer "F.Fab"))
+  (fp_text user "NOAT" (layer "Cmts.User") (effects (font (size 1 1) (thickness 0.15))))
+  (fp_text user "R270" (at 0 5 270) (layer "Eco1.User")
+    (effects (font (size 1 1) (thickness 0.15))))
+)'''
+
+
+def test_unknown_pad_shape_drawn_as_bounding_rect() -> None:
+    """Неизвестная (будущая) форма площадки рисуется описанным прямоугольником size."""
+    fp = kicadfp.loads(_RARE)
+    groups = _layer_groups(_parse(render_svg(fp, grid=None)))
+    pad = {g.get("data-number"): g for g in _pads(groups["F.Cu"])}["1"]
+    assert pad.get("transform") == "translate(1 2)"
+    rect = pad[0]
+    assert rect.tag == Q + "rect"
+    assert [float(rect.get(k)) for k in ("x", "y", "width", "height")] == [-1, -0.5, 2, 1]
+    assert rect.get("rx") is None
+
+
+def test_curve_without_four_points_and_empty_poly() -> None:
+    """Безье не из 4 точек — ломаная; многоугольник без точек не рисуется."""
+    fp = kicadfp.loads(_RARE)
+    groups = _layer_groups(_parse(render_svg(fp, grid=None)))
+    paths = groups["F.SilkS"].findall("s:path", NS)
+    assert [p.get("d") for p in paths] == ["M 0 0 L 1 1"]
+    assert paths[0].get("fill") == "none"
+    assert list(groups.get("F.Fab", [])) == []
+
+
+def test_text_without_at_skipped_and_270_kept_readable() -> None:
+    """Текст без (at) пропускается; 270° («держать читаемым») рисуется как 90°."""
+    fp = kicadfp.loads(_RARE)
+    groups = _layer_groups(_parse(render_svg(fp, grid=None)))
+    assert "Cmts.User" not in groups or not _text_groups(groups["Cmts.User"])
+    t = _text_groups(groups["Eco1.User"])[0]
+    assert t.get("transform").startswith("translate(0 5) rotate(-90)")
+    from kicadfp.render import _readable_angle
+    assert _readable_angle(-135.0, False) == pytest.approx(45.0)
+    assert _readable_angle(-135.0, True) == pytest.approx(-135.0)
+
+
+def test_zero_width_bbox_is_widened_without_margin() -> None:
+    """Вертикальный отрезок при margin=0: документ расширяется до ширины 1 мм."""
+    fp = kicadfp.loads('''(footprint "Y" (version 20240108) (generator "pcbnew")
+      (layer "F.Cu")
+      (fp_line (start 0 0) (end 0 3) (stroke (width 0) (type solid)) (layer "F.SilkS")))''')
+    root = _parse(render_svg(fp, grid=None, margin=0))
+    assert _viewbox(root) == pytest.approx([-0.5, 0, 1, 3])
+    assert root.get("width") == "10" and root.get("height") == "30"
+
+
+def test_render_rejects_non_footprint_and_bad_scale(dip14: Footprint) -> None:
+    with pytest.raises(TypeError, match="Footprint"):
+        render_svg("not a footprint")  # type: ignore[arg-type]
+    for bad in (0, -1, float("inf"), float("nan")):
+        with pytest.raises(ValueError, match="масштаб"):
+            render_svg(dip14, scale=bad)
+
+
+def test_save_png_unwritable_path_raises(dip14: Footprint, tmp_path: Path) -> None:
+    """Ошибка записи PNG (нет каталога) — OSError с путём, файл не создаётся."""
+    pytest.importorskip("PySide6.QtSvg")
+    out = tmp_path / "no_such_dir" / "x.png"
+    with pytest.raises(OSError, match="PNG"):
+        save_png(dip14, out, width=50)
+    assert not out.exists()

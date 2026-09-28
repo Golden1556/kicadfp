@@ -558,6 +558,26 @@ def test_order_for():
 
 
 # ---------------------------------------------------------------------------
+# Версии формата новых корпусов по версии KiCad
+# ---------------------------------------------------------------------------
+
+def test_kicad_format_versions():
+    assert fr.KICAD_FORMAT_VERSIONS == {6: 20211014, 7: 20221018, 8: 20240108, 9: 20241229}
+    assert fr.KICAD_FORMAT_VERSIONS[9] == fr.DEFAULT_VERSION
+    for target, version in ((8, 20240108), ("9", 20241229), ("kicad7", 20221018),
+                            ("KiCad 6", 20211014), (20240108, 20240108), ("20221018", 20221018)):
+        assert fr.kicad_format_version(target) == version, target
+    # профиль каждой версии пишет свою форму: 6 — width и fp_text, 8 — поля, 9 — fill yes|no
+    assert not fr.profile_for(20211014).stroke and fr.profile_for(20221018).stroke
+    assert fr.profile_for(20240108).text_as_property and fr.profile_for(20240108).fill_style \
+        == "solid"
+    assert fr.profile_for(20241229).fill_style == "yesno"
+    for bad in (5, 10, 20240109, "20260206", "kicad", "", None, True, 8.0):
+        with pytest.raises(ValueError, match="версия KiCad"):
+            fr.kicad_format_version(bad)  # type: ignore[arg-type]
+
+
+# ---------------------------------------------------------------------------
 # KiCad читает то, что получается по таблицам (необязательный тест с kicad-cli)
 # ---------------------------------------------------------------------------
 

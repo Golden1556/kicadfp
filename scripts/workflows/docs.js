@@ -16,6 +16,7 @@ const KICAD_NOTE = (args && args.kicad_note) || 'kicad-cli: kicad-cli (KiCad 10.
 
 const COMMON = `
 Проект: kicadfp — «Библиотека и редактор файлов KiCad на языке Python», этап 1 (посадочные места). Заказчик — кафедра САПР ВС РГРТУ, исполнитель — студент группы 346 Хорьков К. А. Полный текст ТЗ: ${TZ} (прочитай целиком; раздел 5 — требования к документации: описание программы (назначение, архитектура, структура пакета, модель данных и форматы), руководство пользователя (установка, CLI, GUI, примеры), руководство программиста (API с примерами, правила расширения на новые типы файлов), программа и методика испытаний (перечень тестов, порядок запуска, критерии); формат — Markdown в репозитории; пояснительная записка по ГОСТ 7.32-2017 — отдельно).
+${(args && args.note) || ''}
 Репозиторий ${REPO} (код готов и протестирован: kicadfp/*.py, kicadfp/generators, kicadfp/gui; тесты tests/; docs/dev/*.md — внутренние спецификации; docs/acceptance_report.md, docs/coverage.md — отчёты; docs/img/ — снимки GUI). Python ${PY}. Пиши по-русски, технически точно, без воды; всё, что утверждаешь о поведении программы, ПРОВЕРЬ по коду/тестам или запуском; все примеры кода и команд должны реально работать (проверь их запуском). Оформление: Markdown с заголовками, таблицами, блоками кода; нумерация разделов как в ГОСТ 19.xxx (1, 1.1, 1.1.1). Не запускай git commit.
 `
 
@@ -29,17 +30,17 @@ const DOCS = [
 ]
 const written = await parallel(DOCS.map(d => () =>
   agent(COMMON + `\nЗАДАЧА: написать ${REPO}/${d.file}. ` + d.prompt + `\nМожно менять только этот файл (и docs/img/* при создании снимков).`,
-    { label: 'docs:' + d.key, phase: 'Write', effort: 'high', model: 'opus' }).then(r => ({ key: d.key, result: String(r).slice(0, 1500) }))
+    { label: 'docs:' + d.key, phase: 'Write', effort: (args && args.fast) ? 'medium' : 'high', model: 'opus' }).then(r => ({ key: d.key, result: String(r).slice(0, 1500) }))
 ))
 
 phase('Verify')
 const verify = await agent(COMMON + `
 ЗАДАЧА: проверка документации. Извлеки ВСЕ блоки кода (python, bash) из README.md и docs/0*.md, выполни каждый (python — в отдельном процессе из каталога ${REPO} с временным каталогом для файлов; bash — команды kicadfp через ${PY} -m kicadfp) и сверь с описанным в тексте выводом/поведением. Исправь в документах всё, что не работает или расходится с фактом; проверь перекрёстные ссылки, единство терминологии (площадка, корпус, слой, представление), нумерацию разделов, наличие всех требований ТЗ п.5. Отчёт: сколько примеров проверено, что исправлено.`,
-  { label: 'docs:verify', phase: 'Verify', effort: 'high', model: 'opus' })
+  { label: 'docs:verify', phase: 'Verify', effort: (args && args.fast) ? 'medium' : 'high', model: (args && args.fast) ? 'sonnet' : 'opus' })
 
 phase('Export')
 const exp = await agent(COMMON + `
 ЗАДАЧА: экспорт документации в DOCX для сдачи (ТЗ п.5.2). Используй python-docx (установи в venv: ${PY} -m pip install python-docx) или pandoc, если есть (which pandoc). Напиши scripts/build_docs.py: конвертирует docs/01..04 *.md в docs/build/*.docx с оформлением, близким к ГОСТ 7.32-2017: Times New Roman 14, полуторный интервал, поля 30/15/20/20 мм, заголовки по центру/с абзаца, таблицы с рамками, код моноширинным 10–11, нумерация страниц, титульный лист (Министерство…, РГРТУ, кафедра САПР ВС, название документа, «Хорьков К.А., группа 346», Рязань 2026), содержание (поле TOC), рисунки из docs/img (Mermaid-диаграммы — как текст в рамке или отрисуй через Python в PNG упрощённо, если mermaid недоступен). Также один сводный docs/build/kicadfp_документация.docx со всеми четырьмя документами. Запусти скрипт, проверь, что файлы открываются (python-docx перечитывает), размеры разумны.`,
-  { label: 'docs:export', phase: 'Export', effort: 'high', model: 'opus' })
+  { label: 'docs:export', phase: 'Export', effort: (args && args.fast) ? 'medium' : 'high', model: (args && args.fast) ? 'sonnet' : 'opus' })
 
 return { written, verify: String(verify).slice(0, 2000), export: String(exp).slice(0, 2000) }

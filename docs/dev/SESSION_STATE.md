@@ -34,7 +34,7 @@ Mac; всё, что нужно для продолжения, лежит в эт
   PySide6). Ядро без сторонних зависимостей. В облачном контейнере (Ubuntu noble) для
   PySide6 нужны системные библиотеки: `apt-get install libegl1 libgl1 libxkbcommon0
   libdbus-1-3 libfontconfig1 libglib2.0-0 libxcb-cursor0 libopengl0 libxkbcommon-x11-0`.
-* Тесты: `KICAD_CLI=$(which kicad-cli) QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest -q`
+* Тесты: `KICAD_CLI=$(which kicad-cli) KICAD8_CLI=$(which kicad-cli8) QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest -q`
   (после волны core ~8100 тестов, все зелёные; ~10 мин). Расширенный round-trip:
   `scripts/fetch_refs.sh` (в облаке `.cache/kfp` уже скачан — 22 718 файлов), затем
   `KICADFP_EXTRA_FIXTURES=.cache/kfp/v8.0.0:.cache/kfp/v9.0.0:.cache/kfp/master:.cache/kfp/v7.0.0:.cache/kfp/v6.0.0 pytest tests/test_roundtrip.py -m slow`.
@@ -89,6 +89,23 @@ Mac; всё, что нужно для продолжения, лежит в эт
    Ревью GUI: 6 замечаний (незавершённый ввод при Ctrl+S/закрытии, повторное открытие
    файла с «Сохранить», no-op смены слоёв и др.) исправлены, регрессии в
    `tests/test_gui_regressions.py`.
+
+9. **Приёмка, фаза Acceptance** (`qa.js`, 2026-09-28): `tests/test_acceptance.py` — сценарии
+   Г.1–Г.10 (`test_scenario_N_*`, факты через `record_property`); `tests/test_kicad_cli.py` +
+   `tests/kicad_cli_tools.py` — файлы, записанные kicadfp (фикстуры в режимах save/upgrade/edit,
+   все генераторы, результат convert — в форматах KiCad 6–9), открывают kicad-cli 9.0.1 и
+   8.0.6, прочитанное KiCad совпадает с прочитанным kicadfp; `scripts/acceptance_report.py`
+   (`--full` — все файлы и `.cache/kfp/v8.0.0`) → `docs/acceptance_report.md`. Найдено и
+   исправлено: (1) новые корпуса (генераторы, convert, GUI «Создать типовой корпус») были
+   только в формате KiCad 9, который KiCad 8 не открывает — добавлен выбор формата:
+   `format_rules.kicad_format_version`, `generators.target_version(8)`/`from_json(version=)`,
+   `legacy.convert(version=)`, CLI `gen/convert --kicad 8`, поле «Формат файла» в диалоге;
+   (2) при пропущенной «)» в середине файла позиция ошибки указывала на конец файла — теперь
+   по отступам называется незакрытый узел. kicad-cli 9.0.1 читает и `.mod` (`fp upgrade
+   My_lib.mod`). KiCad 8: `nix-env -p /nix/var/nix/profiles/kicad8 -f
+   https://channels.nixos.org/nixos-24.11/nixexprs.tar.xz -iA kicad-small` (nix —
+   `/nix/store/*-nix-2.24.10/bin`), ссылка `/usr/local/bin/kicad-cli8`, тесты берут его из
+   `KICAD8_CLI` или PATH (`kicad-cli8`).
 
 ## Не сделано (по порядку)
 

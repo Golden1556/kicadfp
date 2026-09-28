@@ -1098,6 +1098,29 @@ def test_convert_variants(capsys, tmp_path):
     assert rc == 2 and "это файл" in err
 
 
+def test_gen_and_convert_kicad_target(capsys, tmp_path):
+    """Регрессия (приёмка): ``--kicad 8`` — корпус в формате KiCad 8 (20240108), который
+    открывает и KiCad 8 (формат KiCad 9 по умолчанию KiCad 8 не читает)."""
+    out = tmp_path / "k8.pretty" / "dip14.kicad_mod"
+    rc, text, err = call(capsys, "gen", "dip", "--pins", "14", "--pitch", "2.5",
+                         "--row-pitch", "7.5", "--kicad", "8", "-o", out)
+    assert rc == 0, err
+    fp = kicadfp.load(out)
+    assert fp.version == 20240108 and fp.name == "dip14" and len(fp.pads) == 14
+    rc, text, _ = call(capsys, "gen", "lab_mlt", "--kicad", "6")
+    assert rc == 0 and "(version 20211014)" in text and "(fp_text reference" in text
+    rc, text, _ = call(capsys, "gen", "lab_mlt")
+    assert rc == 0 and "(version 20241229)" in text
+    rc, _, err = call(capsys, "gen", "lab_mlt", "--kicad", "5")
+    assert rc == 2 and "--kicad" in err
+    conv = tmp_path / "conv8.pretty"
+    rc, text, err = call(capsys, "convert", MY_LIB, "-o", conv, "--kicad", "8")
+    assert rc == 0, err
+    assert {kicadfp.load(q).version for q in conv.glob("*.kicad_mod")} == {20240108}
+    rc, text, _ = call(capsys, "convert", MY_LIB, "--kicad", "7")
+    assert rc == 0 and "dip14 (площадок: 14)" in text
+
+
 def test_convert_format_error_and_issues(capsys, tmp_path):
     bad = tmp_path / "bad.mod"
     bad.write_text("PCBNEW-LibModule-V1\n$INDEX\nx\n$EndINDEX\n$MODULE x\n"

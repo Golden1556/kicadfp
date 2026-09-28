@@ -43,6 +43,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QDialog,
 from .. import generators as _gen
 from .. import layers as _layers
 from .._version import __version__
+from ..format_rules import KICAD_FORMAT_VERSIONS, kicad_format_version
 from ..model import (JUSTIFY_VALUES, PAD_SHAPES, PAD_TYPES, STROKE_TYPES, Arc, Circle, Curve,
                      Footprint, Graphic, Line, Model, Pad, Poly, Rect, Text, View)
 from ..validate import Issue, validate
@@ -158,8 +159,12 @@ class GenerateDialog(QDialog):
     ``bool`` — ``QCheckBox``, ``str`` — ``QLineEdit``, списки и кортежи (``pad_size``,
     ``mounting_holes``) — ``QLineEdit`` с текстом JSON (пусто — ``None``). Параметр
     ``name`` вынесен в отдельное поле «Имя» (пусто — имя по умолчанию генератора).
+    «Формат файла» — версия KiCad, для которой строится корпус (KiCad 9 по умолчанию; KiCad 8
+    не открывает файлы формата KiCad 9, для него — «KiCad 8», см.
+    :func:`kicadfp.generators.target_version`).
 
     Программный API: :meth:`set_generator`, :meth:`set_param`, :meth:`set_name`,
+    :meth:`set_kicad_version` / :attr:`kicad_version`,
     :meth:`params`, :meth:`build` (→ ``Footprint`` или ``None``; ошибка — в
     :attr:`error_text`), :attr:`footprint` — последний построенный корпус,
     :meth:`open_in` — открыть результат в документе. «ОК» строит корпус и закрывает диалог
@@ -184,6 +189,12 @@ class GenerateDialog(QDialog):
         top.addRow("Тип корпуса:", self._combo)
         self._name_edit = QLineEdit(self)
         top.addRow("Имя:", self._name_edit)
+        self._format = QComboBox(self)
+        for major in sorted(KICAD_FORMAT_VERSIONS, reverse=True):
+            self._format.addItem(f"KiCad {major} ({KICAD_FORMAT_VERSIONS[major]})", major)
+        self._format.setToolTip("Версия формата файла нового корпуса. KiCad открывает файлы "
+                                "своей и более старых версий: для KiCad 8 выберите «KiCad 8».")
+        top.addRow("Формат файла:", self._format)
         outer.addLayout(top)
         self._summary = QLabel(self)
         self._summary.setWordWrap(True)
@@ -232,6 +243,7 @@ class GenerateDialog(QDialog):
 
         self._combo.currentIndexChanged.connect(self._on_combo)
         self._name_edit.textChanged.connect(self._schedule_preview)
+        self._format.currentIndexChanged.connect(self._schedule_preview)
         self.set_generator(generator or next(iter(_gen.GENERATORS)))
 
     # --- свойства -------------------------------------------------------------------------------
@@ -254,6 +266,18 @@ class GenerateDialog(QDialog):
     def error_label(self) -> QLabel:
         """Строка ошибки."""
         return self._error
+
+    @property
+    def kicad_version(self) -> int:
+        """Версия KiCad (6–9), в формате которой строится корпус (поле «Формат файла»)."""
+        return int(self._format.currentData())
+
+    def set_kicad_version(self, kicad: int | str) -> None:
+        """Выбрать формат файла: номер KiCad (6–9) или версия формата (``20240108``);
+        ``ValueError`` — неизвестная версия."""
+        version = kicad_format_version(kicad)
+        major = next(k for k, v in KICAD_FORMAT_VERSIONS.items() if v == version)
+        self._format.setCurrentIndex(self._format.findData(major))
 
     def param_names(self) -> list[str]:
         """Параметры формы (без ``name`` — он в поле «Имя»)."""
@@ -476,7 +500,8 @@ class GenerateDialog(QDialog):
         self._timer.stop()
         try:
             kwargs = self.params()
-            fp = _gen.get(self._generator)(**kwargs)
+            with _gen.target_version(self.kicad_version):
+                fp = _gen.get(self._generator)(**kwargs)
             if not isinstance(fp, Footprint):
                 raise TypeError("генератор вернул не корпус")
         except Exception as e:  # noqa: BLE001 — любые ошибки параметров показываются в форме

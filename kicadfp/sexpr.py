@@ -748,10 +748,57 @@ def parse_all(text: str) -> list[Node]:
         raise SexprSyntaxError("ожидалось имя узла после «(»", line, end_col)
     if stack:
         top = stack[-1]
-        raise SexprSyntaxError(
-            f"незакрытая скобка: узел «{top.name}» (открыт в строке {top.line}, позиция {top.col})",
-            line, end_col)
+        at_end = f"узел «{top.name}» (открыт в строке {top.line}, позиция {top.col})"
+        hint = _unclosed_hint(text)
+        if hint is not None and (hint[1], hint[2]) != (top.line, top.col):
+            name, h_line, h_col, next_line = hint
+            raise SexprSyntaxError(
+                f"незакрытая скобка: не закрыт узел «{name}» (строка {next_line} начинается на "
+                f"том же уровне отступа, что и строка узла); в конце файла (строка {line}) "
+                f"остался незакрытым {at_end}", h_line, h_col)
+        raise SexprSyntaxError(f"незакрытая скобка: {at_end}", line, end_col)
     return roots
+
+
+def _unclosed_hint(text: str) -> tuple[str, int, int, int] | None:
+    """Где, судя по отступам, пропущена закрывающая скобка (для сообщения об ошибке).
+
+    Лишняя незакрытая скобка «сдвигает» все следующие закрывающие, и к концу файла открытым
+    остаётся корень — место ошибки по одной скобочной структуре не найти. KiCad пишет файлы
+    с отступами по вложенности, поэтому первая строка, которая начинается с «(» на отступе
+    не больше отступа строки, где открыт ещё не закрытый узел, указывает на этот узел.
+    Возвращает ``(имя, строка, позиция, строка-признак)`` самого вложенного такого узла или
+    ``None`` (файл в одну строку, отступы не согласуются). Вызывается только при ошибке."""
+    stack: list[tuple[str, int, int, int]] = []   # имя, строка, позиция, отступ строки
+    line, line_start = 1, 0
+    first = True       # следующий токен — первый в строке
+    indent = 0         # отступ текущей строки
+    pending: tuple[int, int] | None = None
+    for m in _TOKEN_RE.finditer(text):
+        k = m.lastindex
+        if k == 1:
+            line += 1
+            line_start = m.end()
+            first = True
+            continue
+        if first:
+            first = False
+            indent = m.start() - line_start
+            if k == 2:
+                late = [e for e in stack if e[1] < line and e[3] >= indent]
+                if late:
+                    name, n_line, n_col, _ = late[-1]
+                    return name, n_line, n_col, line
+        if k == 2:
+            pending = (line, m.start() - line_start + 1)
+        elif k == 5 and pending is not None:
+            stack.append((m.group(5), pending[0], pending[1], indent))
+            pending = None
+        elif k == 3:
+            pending = None
+            if stack:
+                stack.pop()
+    return None
 
 
 # ---------------------------------------------------------------------------

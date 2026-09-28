@@ -12,7 +12,9 @@
   KICADFP_EXTRA_FIXTURES — список каталогов через ``os.pathsep`` с дополнительными
       .pretty (полные клоны библиотек) для расширенного прогона round-trip;
   KICAD_CLI — путь к kicad-cli; при отсутствии тесты с маркером ``kicad_cli`` пропускаются
-      (фикстура ``kicad_cli`` требует kicad-cli >= 9, ``kicad_cli_any`` — любую версию).
+      (фикстура ``kicad_cli`` требует kicad-cli >= 9, ``kicad_cli_any`` — любую версию);
+  KICAD8_CLI — путь к kicad-cli KiCad 8.x (по умолчанию ``kicad-cli8`` из PATH) для проверки,
+      что файлы открываются и в KiCad 8 (фикстура ``kicad8_cli``; без него — skip).
 """
 
 from __future__ import annotations
@@ -141,6 +143,26 @@ def kicad_cli_any() -> str:
     cli = _find_kicad_cli()
     if not cli:
         pytest.skip("kicad-cli не найден (задайте KICAD_CLI)")
+    return cli
+
+
+def find_kicad8_cli() -> str | None:
+    """kicad-cli KiCad 8.x: ``KICAD8_CLI`` или ``kicad-cli8`` из PATH; ``None`` — нет
+    (или это не 8.x)."""
+    cli = os.environ.get("KICAD8_CLI") or shutil.which("kicad-cli8")
+    if not cli or not Path(cli).exists():
+        return None
+    ver = kicad_cli_version(cli)
+    return cli if ver and ver[0] == 8 else None
+
+
+@pytest.fixture
+def kicad8_cli() -> str:
+    """Путь к kicad-cli KiCad 8.x (``KICAD8_CLI``/``kicad-cli8``) или skip: KiCad 8 читает
+    форматы до 20240108 включительно и не открывает файлы формата KiCad 9."""
+    cli = find_kicad8_cli()
+    if not cli:
+        pytest.skip("kicad-cli KiCad 8 не найден (задайте KICAD8_CLI)")
     return cli
 
 

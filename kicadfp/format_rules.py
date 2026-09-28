@@ -29,7 +29,8 @@ __all__ = [
     "GRAPHIC_NAMES", "TEXT_NAMES", "KNOWN_FOOTPRINT_CHILDREN", "group_of",
     "insert_in_group", "order_for", "DRAWING_GROUPS", "DRAWING_TYPE_RANK",
     "DRAWING_TYPE_RANK_V6", "SHAPE_RANK", "drawing_sort_key", "positional_atoms",
-    "flag_slot", "POSITIONAL_ATOMS", "LOCKED_SLOT",
+    "flag_slot", "POSITIONAL_ATOMS", "LOCKED_SLOT", "KICAD_FORMAT_VERSIONS",
+    "kicad_format_version",
 ]
 
 # Версия формата для новых корпусов — KiCad 9.0 (SEXPR_BOARD_FILE_VERSION 20241229).
@@ -47,6 +48,36 @@ V_NORMALIZED = 20231014       # «V8 file format normalization»: uuid, (hide ye
 V_PASTE_RATIO = 20240225      # solder_paste_margin_ratio у корпуса (вместо solder_paste_ratio)
 V_FILL_YESNO = 20241129       # «Normalise … fill properties»: (fill yes|no) вместо solid|none;
                               # с 9.0 же (locked yes) у графики стоит после fill, а не до stroke
+
+#: Версия формата, которую пишет KiCad X.0 (SEXPR_BOARD_FILE_VERSION выпуска), — для
+#: новых корпусов, которые должны открываться в KiCad X: KiCad не читает файл версии новее
+#: своей (KiCad 8.0 на ``(version 20241229)`` отвечает «Unable to load library»), а более
+#: старые форматы читают все новые выпуски. Ключ — номер KiCad.
+KICAD_FORMAT_VERSIONS: dict[int, int] = {6: 20211014, 7: 20221018, 8: 20240108, 9: 20241229}
+
+
+def kicad_format_version(target: int | str) -> int:
+    """Версия формата новых корпусов для ``target``: номер KiCad (6–9, в том числе строкой
+    ``"8"``/``"kicad8"``) или сама версия формата из :data:`KICAD_FORMAT_VERSIONS`
+    (``20240108``). ``ValueError`` — для прочих значений (KiCad 5 ``module`` и
+    промежуточные версии ночных сборок для новых корпусов не поддерживаются)."""
+    if isinstance(target, bool):
+        raise ValueError(f"версия KiCad: ожидается 6–9 или версия формата, получено {target!r}")
+    value: int | None = None
+    if isinstance(target, int):
+        value = target
+    elif isinstance(target, str):
+        s = target.strip().lower().replace(" ", "")
+        s = s[len("kicad"):] if s.startswith("kicad") else s
+        if s.isdigit():
+            value = int(s)
+    if value in KICAD_FORMAT_VERSIONS:
+        return KICAD_FORMAT_VERSIONS[value]
+    if value in KICAD_FORMAT_VERSIONS.values():
+        return value
+    known = ", ".join(f"{k} ({v})" for k, v in KICAD_FORMAT_VERSIONS.items())
+    raise ValueError(f"версия KiCad: ожидается одно из {known}, получено {target!r}")
+
 
 # Порядок графики KiCad 5.1/6.0: голый флаг locked сразу после имени узла (парсер 6/7
 # принимает его только там), координаты, layer, width, fill, tstamp. Хвостовые

@@ -2,10 +2,11 @@
 
 Каждый генератор — функция с именованными параметрами (все со значениями по умолчанию),
 возвращающая новый :class:`~kicadfp.model.Footprint` формата KiCad 9 (``version 20241229``,
-``generator "kicadfp"``): Reference ``REF**`` на F.SilkS над корпусом, Value (имя) на F.Fab
-под корпусом, контуры F.SilkS (0.12) и F.Fab (0.1), область размещения F.CrtYd (0.05,
-отступ 0.25 / 0.5 у разъёмов, сетка 0.01), ``(attr through_hole)``, осмысленные
-``descr``/``tags``, ``uuid`` у всех элементов (детерминированные ``uuid5``).
+``generator "kicadfp"``; другой формат — в блоке ``with target_version(8):`` или
+``from_json(…, version=8)``, см. ниже): Reference ``REF**`` на F.SilkS над корпусом, Value
+(имя) на F.Fab под корпусом, контуры F.SilkS (0.12) и F.Fab (0.1), область размещения
+F.CrtYd (0.05, отступ 0.25 / 0.5 у разъёмов, сетка 0.01), ``(attr through_hole)``,
+осмысленные ``descr``/``tags``, ``uuid`` у всех элементов (детерминированные ``uuid5``).
 
 Семейства (геометрия библиотеки KiCad v8, KLC): :func:`dip`, :func:`pin_header`,
 :func:`resistor`, :func:`capacitor_axial`, :func:`diode`, :func:`capacitor_radial`,
@@ -20,6 +21,12 @@
 * :func:`from_json` — вызов генератора по имени со словарём параметров (или текстом JSON);
 * :func:`coerce_param` — приведение значения параметра (в том числе строки из командной
   строки) к типу из сигнатуры.
+
+Версия формата. KiCad не открывает файл версии новее своей: корпус формата KiCad 9 KiCad 8
+не прочитает. Чтобы корпус открывался в KiCad 8 (ТЗ 4.5.3), его строят в формате KiCad 8 —
+:func:`target_version` (контекстный менеджер; номер KiCad 6–9 или версия формата) или
+параметр ``version`` у :func:`from_json` (CLI: ``kicadfp gen … --kicad 8``);
+:func:`current_version` — действующая версия.
 """
 
 from __future__ import annotations
@@ -31,6 +38,7 @@ from collections.abc import Callable, Mapping
 from typing import Any, NamedTuple
 
 from ..model import Footprint
+from ._common import current_version, target_version
 from .axial import capacitor_axial, diode, resistor
 from .dip import dip
 from .lab import lab_dip14, lab_mlt, lab_snp8
@@ -42,7 +50,7 @@ __all__ = [
     "dip", "pin_header", "resistor", "capacitor_axial", "diode", "capacitor_radial",
     "transistor", "transistor_inline", "lab_dip14", "lab_mlt", "lab_snp8",
     "GENERATORS", "ALIASES", "ParamInfo", "describe", "summary", "get", "from_json",
-    "coerce_param",
+    "coerce_param", "target_version", "current_version",
 ]
 
 #: Реестр генераторов для CLI/GUI: имя → функция (architecture.md §11).
@@ -265,12 +273,15 @@ def coerce_param(kind: str, name: str, value: Any) -> Any:
     return value
 
 
-def from_json(kind: str, params: Mapping[str, Any] | str | None = None) -> Footprint:
+def from_json(kind: str, params: Mapping[str, Any] | str | None = None, *,
+              version: int | str | None = None) -> Footprint:
     """Создать корпус генератором ``kind`` с параметрами ``params`` — словарём (например,
     из JSON-файла CLI ``--params``) или текстом JSON-объекта. Значения приводятся
     :func:`coerce_param` (списки → кортежи, строки → числа …); ключи — с ``_`` или ``-``.
-    ``KeyError`` — неизвестный генератор; ``ValueError`` — неизвестный параметр или
-    неверное значение."""
+    ``version`` — формат корпуса: номер KiCad (6–9) или версия формата (см.
+    :func:`target_version`); ``None`` — действующий (по умолчанию KiCad 9).
+    ``KeyError`` — неизвестный генератор; ``ValueError`` — неизвестный параметр, неверное
+    значение или неизвестная версия."""
     func = get(kind)
     if params is None:
         data: Mapping[str, Any] = {}
@@ -284,4 +295,7 @@ def from_json(kind: str, params: Mapping[str, Any] | str | None = None) -> Footp
     if not isinstance(data, Mapping):
         raise ValueError("параметры генератора: ожидается объект JSON {имя: значение}")
     kwargs = {str(k).replace("-", "_"): coerce_param(kind, str(k), v) for k, v in data.items()}
-    return func(**kwargs)
+    if version is None:
+        return func(**kwargs)
+    with target_version(version):
+        return func(**kwargs)

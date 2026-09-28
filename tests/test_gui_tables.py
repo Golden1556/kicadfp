@@ -557,3 +557,145 @@ def test_widgets_without_document(doc, qtbot):
     assert pt.add_pad() is None and pt.remove_selected() == 0
     model = PadTableModel(doc)
     assert model.rowCount() == 0 and ItemsTableModel(doc).columnCount() == 9
+
+
+# ---------------------------------------------------------------------------------------------
+# Таблица графики: редкие ветви (кривые, неизменённые значения, недопустимые роли)
+# ---------------------------------------------------------------------------------------------
+
+def test_items_helpers_unknown_item_and_check_values():
+    """Вспомогательные функции: вид и координаты «чужого» элемента, разбор CheckStateRole."""
+    from kicadfp.gui.items_table import _coords, _is_checked, item_kind
+
+    fp = generators.GENERATORS["dip"](pins=8)
+    pad = fp.pads[0]
+    assert item_kind(pad) == "pad"  # не графика и не текст — имя узла
+    assert item_kind(object()) == "?"
+    assert _coords(pad) == [(None, False)] * 4
+    assert _is_checked(True) is True and _is_checked(False) is False
+    assert _is_checked(Qt.CheckState.Checked.value) is True
+    assert _is_checked(0) is False
+    assert _is_checked("да") is True and _is_checked("") is False  # не число -> bool()
+
+
+def test_items_curve_rows_read_only(doc, qtbot):
+    fp = generators.GENERATORS["dip"](pins=8)
+    doc.open_footprint(fp)
+    curve = doc.fp.new_curve([(0, 0), (1, 1), (2, 1), (3, -1)], "F.Fab", 0.1)
+    empty = doc.fp.new_curve([(0, 0), (1, 1), (2, 1), (3, 0)], "F.Fab", 0.1)
+    empty.node.items.remove(empty.node.find("pts"))  # кривая без точек (повреждённый файл)
+    doc.undo_stack.clear()
+    t = ItemsTable(doc)
+    qtbot.addWidget(t)
+    m = t.items_model()
+    m._on_document_changed()
+    r, r_empty = m.row_of(curve), m.row_of(empty)
+    # X1/Y1 — первая точка, X2/Y2 — последняя; всё только для чтения
+    assert [cell(m, r, c) for c in (COL_X1, COL_Y1, COL_X2, COL_Y2)] == ["0", "0", "3", "-1"]
+    assert [cell(m, r_empty, c) for c in (COL_X1, COL_Y1, COL_X2, COL_Y2)] == [""] * 4
+    for c in (COL_X1, COL_Y1, COL_X2, COL_Y2):
+        assert not m.flags(m.index(r, c)) & Qt.ItemFlag.ItemIsEditable
+    errors: list[str] = []
+    m.error.connect(errors.append)
+    assert m.setData(m.index(r, COL_X1), "5", ED) is False
+    assert errors and "только для чтения" in errors[-1]
+    assert m.setData(m.index(r, COL_TEXT), "x", ED) is False  # у графики нет текста
+    assert cell(m, r, COL_TEXT) == "" and cell(m, r, COL_HIDDEN) == ""
+    assert doc.undo_stack.count() == 0
+
+
+def test_items_tooltips_alignment_and_user_role(dip, items):
+    m = items.items_model()
+    tip = Qt.ItemDataRole.ToolTipRole
+    assert "Ширина" in m.headerData(COL_WIDTH, Qt.Orientation.Horizontal, tip)
+    assert m.headerData(COL_KIND, Qt.Orientation.Horizontal, DISP) == "Тип"
+    ref_row = m.row_of(dip.fp.reference)
+    assert cell(m, ref_row, COL_KIND, tip) == "Поле «Reference»"
+    assert cell(m, 0, COL_KIND, tip) == "Вид элемента"  # графика — подсказка столбца
+    align = cell(m, 0, COL_X1, Qt.ItemDataRole.TextAlignmentRole)
+    assert align & int(Qt.AlignmentFlag.AlignRight)
+    assert cell(m, 0, COL_KIND, Qt.ItemDataRole.TextAlignmentRole) is None
+    assert cell(m, 0, COL_KIND, Qt.ItemDataRole.UserRole).node is dip.fp.graphics[0].node
+    assert cell(m, 0, COL_KIND, Qt.ItemDataRole.DecorationRole) is None
+    # строки за пределами таблицы
+    bad = m.index(999, 0)
+    assert m.data(bad) is None and m.flags(bad) == Qt.ItemFlag.NoItemFlags
+    assert m.setData(bad, "1", ED) is False
+
+
+def test_items_poly_tooltip(doc, qtbot):
+    doc.open_footprint(generators.GENERATORS["dip"](pins=8))
+    poly = doc.fp.new_poly([(0, 0), (1, 0), (1, 1)], "F.Fab", 0.1)
+    t = ItemsTable(doc)
+    qtbot.addWidget(t)
+    m = t.items_model()
+    m._on_document_changed()
+    r = m.row_of(poly)
+    assert cell(m, r, COL_X2, Qt.ItemDataRole.ToolTipRole) == "Число точек многоугольника"
+
+
+def test_items_unchanged_values_make_no_undo_step(dip, items):
+    """Ввод текущего значения принимается, но шага отмены не создаёт."""
+    m = items.items_model()
+    fp = dip.fp
+    line = fp.graphics[0]
+    ref = fp.reference
+    rr = m.row_of(ref)
+    from kicadfp.gui.pad_table import format_mm
+    assert m.setData(m.index(0, COL_LAYER), line.layer, ED)
+    assert m.setData(m.index(0, COL_WIDTH), format_mm(line.width), ED)
+    assert m.setData(m.index(0, COL_X1), format_mm(line.start[0]), ED)
+    assert m.setData(m.index(rr, COL_TEXT), ref.text, ED)
+    assert m.setData(m.index(rr, COL_WIDTH), f"{ref.font_size_x} x {ref.font_size_y}", ED)
+    state = Qt.CheckState.Checked if ref.hide else Qt.CheckState.Unchecked
+    assert m.setData(m.index(rr, COL_HIDDEN), state, CHECK)
+    assert dip.undo_stack.count() == 0
+    # «Скрыт» — только через CheckStateRole и только у текста; прочие ячейки — только EditRole
+    assert m.setData(m.index(rr, COL_HIDDEN), True, ED) is False
+    assert m.setData(m.index(0, COL_HIDDEN), Qt.CheckState.Checked, CHECK) is False
+    assert m.setData(m.index(0, COL_WIDTH), "0.3", CHECK) is False
+    assert m.setData(m.index(rr, COL_TEXT), None, ED) and ref.text == ""
+    assert dip.undo_stack.count() == 1
+    dip.undo()
+    assert dip.fp.dumps().encode("utf-8") == DIP14.read_bytes()
+
+
+def test_items_text_single_font_size_and_arc_start(doc, qtbot):
+    doc.open_footprint(generators.GENERATORS["dip"](pins=8))
+    arc = doc.fp.new_arc((0, 1), (1, 2), (2, 1), "F.Fab", 0.1)
+    doc.undo_stack.clear()
+    t = ItemsTable(doc)
+    qtbot.addWidget(t)
+    m = t.items_model()
+    m._on_document_changed()
+    r = m.row_of(arc)
+    assert m.setData(m.index(r, COL_X1), "-0.5", ED) and arc.start == (-0.5, 1)
+    assert m.setData(m.index(r, COL_Y1), "0.5", ED) and arc.start == (-0.5, 0.5)
+    assert m.setData(m.index(r, COL_X2), "2.5", ED) and arc.end == (2.5, 1)
+    ref = doc.fp.reference
+    rr = m.row_of(ref)
+    assert m.setData(m.index(rr, COL_WIDTH), "0.8", ED)  # одно число -> квадратный шрифт
+    assert (ref.font_size_x, ref.font_size_y) == (0.8, 0.8)
+    assert doc.undo_stack.count() == 4
+
+
+def test_items_remove_nothing_removable(dip, items):
+    """Выделены только Reference и Value — удалять нечего, документ не меняется."""
+    m = items.items_model()
+    items.select_item(dip.fp.reference)
+    assert items.remove_selected() == 0
+    items.clearSelection()
+    assert items.remove_selected() == 0
+    assert m.rowCount() == 21 and dip.undo_stack.count() == 0
+
+
+def test_items_remove_several_in_one_undo_step(dip, items):
+    m = items.items_model()
+    sel = items.selectionModel()
+    for r in (0, 1, 2):
+        sel.select(m.index(r, 0), QItemSelectionModel.SelectionFlag.Select
+                   | QItemSelectionModel.SelectionFlag.Rows)
+    assert items.remove_selected() == 3
+    assert m.rowCount() == 18 and dip.undo_stack.count() == 1
+    dip.undo()
+    assert dip.fp.dumps().encode("utf-8") == DIP14.read_bytes()

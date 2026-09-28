@@ -138,6 +138,25 @@ def test_generate_errors_go_to_label(qtbot):
         dlg.set_param("no_such_param", 1)
 
 
+def test_generate_dialog_kicad_format(qtbot):
+    """Регрессия (приёмка): «Формат файла» — корпус в формате KiCad 8 (его открывает и
+    KiCad 8; формат KiCad 9 по умолчанию KiCad 8 не читает)."""
+    dlg = GenerateDialog(generator="lab_dip14", preview=False)
+    qtbot.addWidget(dlg)
+    assert dlg.kicad_version == 9
+    assert dlg.build().version == 20241229
+    dlg.set_kicad_version(8)
+    fp = dlg.build()
+    assert dlg.kicad_version == 8 and fp.version == 20240108
+    assert io.dumps(fp) == io.dumps(generators.from_json("lab_dip14", {}, version=8))
+    dlg.set_kicad_version(20211014)
+    assert dlg.kicad_version == 6 and dlg.build().version == 20211014
+    with pytest.raises(ValueError):
+        dlg.set_kicad_version(5)
+    assert dlg.kicad_version == 6
+    assert generators.current_version() == 20241229   # контекст не «протекает»
+
+
 def test_generate_open_in_document(qtbot, doc):
     dlg = GenerateDialog(generator="lab_dip14", preview=False)
     qtbot.addWidget(dlg)

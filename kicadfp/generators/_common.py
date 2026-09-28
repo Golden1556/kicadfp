@@ -5,7 +5,9 @@
 * константы KLC (толщины линий, шрифт, отступы courtyard, зазор шелкографии);
 * округление к сетке courtyard 0.01 «наружу» (:func:`floor_grid`, :func:`ceil_grid`);
 * создание корпуса (:func:`new_footprint`) с Reference (F.SilkS) и Value (F.Fab) и без
-  служебных полей Datasheet/Description (lab-generators.md §1.2 п.4);
+  служебных полей Datasheet/Description (lab-generators.md §1.2 п.4); версия формата —
+  :data:`~kicadfp.format_rules.DEFAULT_VERSION` (KiCad 9) или заданная
+  :func:`target_version` (KiCad 6/7/8 — чтобы корпус открывался в этих версиях);
 * площадки: одиночные (:func:`add_pad`), ряды (:func:`add_pad_row`), монтажные отверстия
   (:func:`add_mounting_hole`);
 * графика: ломаные (:func:`add_polyline`), дуги в направлении обхода KiCad
@@ -21,12 +23,14 @@
 
 from __future__ import annotations
 
+import contextvars
 import math
 import uuid as _uuidlib
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Iterator, Sequence
+from contextlib import contextmanager
 from typing import NamedTuple
 
-from ..format_rules import DEFAULT_VERSION, drawing_sort_key
+from ..format_rules import DEFAULT_VERSION, drawing_sort_key, kicad_format_version
 from ..geometry import BBox, angle_of, arc_from_three_points, normalize_angle, round_mm
 from ..model import Footprint, Pad, Text
 from ..sexpr import Node, Str, to_compact
@@ -39,7 +43,8 @@ __all__ = [
     "new_footprint", "set_texts", "add_fab_reference", "fab_reference_size",
     "add_pad", "add_pad_row", "add_mounting_hole", "add_polyline", "add_lines", "add_arc",
     "courtyard_box", "add_courtyard_rect", "pad_keepouts", "clip_silk", "clip_segment",
-    "clip_arc", "clip_circle", "finalize", "min_silk_clearance",
+    "clip_arc", "clip_circle", "finalize", "min_silk_clearance", "target_version",
+    "current_version",
 ]
 
 Point = tuple[float, float]
@@ -127,22 +132,60 @@ def _check_drill(drill: float, size: tuple[float, float]) -> None:
 
 
 # ---------------------------------------------------------------------------------------------
+# Версия формата новых корпусов
+# ---------------------------------------------------------------------------------------------
+
+_TARGET_VERSION: contextvars.ContextVar[int] = contextvars.ContextVar(
+    "kicadfp_generators_target_version", default=DEFAULT_VERSION)
+
+
+def current_version() -> int:
+    """Версия формата, в которой генераторы сейчас строят корпуса (по умолчанию
+    :data:`~kicadfp.format_rules.DEFAULT_VERSION` — KiCad 9, 20241229)."""
+    return _TARGET_VERSION.get()
+
+
+@contextmanager
+def target_version(kicad: int | str) -> Iterator[int]:
+    """Строить корпуса генераторами в формате KiCad ``kicad`` (6–9) или версии формата
+    (``20240108``) внутри блока ``with``; возвращает версию формата.
+
+    Корпус формата KiCad 9 (по умолчанию) KiCad 8 не открывает («Unable to load library»:
+    версия файла новее его собственной), а формат KiCad 8 открывают и KiCad 8, и KiCad 9
+    (ТЗ 4.5.3)::
+
+        with generators.target_version(8):
+            fp = generators.lab_dip14()      # (version 20240108)
+
+    Содержимое то же, меняется только форма записи по профилю версии (``fill solid|none``
+    вместо ``yes|no``, без ``embedded_fonts``; в KiCad 6/7 — ``fp_text`` вместо полей
+    ``property``, ``width``/``stroke`` и т. п.). ``ValueError`` — неизвестная версия.
+    Действует в текущем потоке/контексте (``contextvars``)."""
+    token = _TARGET_VERSION.set(kicad_format_version(kicad))
+    try:
+        yield _TARGET_VERSION.get()
+    finally:
+        _TARGET_VERSION.reset(token)
+
+
+# ---------------------------------------------------------------------------------------------
 # Корпус и тексты
 # ---------------------------------------------------------------------------------------------
 
 def new_footprint(name: str, *, descr: str = "", tags: str = "",
                   attrs: Iterable[str] = ("through_hole",)) -> Footprint:
-    """Новый корпус формата ``DEFAULT_VERSION`` (KiCad 9) с генератором ``kicadfp``.
+    """Новый корпус с генератором ``kicadfp`` в формате :func:`current_version`
+    (``DEFAULT_VERSION`` — KiCad 9, если не задано :func:`target_version`).
 
     Создаются Reference ``"REF**"`` на F.SilkS и Value = имя на F.Fab (шрифт 1 × 1, толщина
     0.15; положения задаёт :func:`set_texts`), ``attr``, ``descr``/``tags``. Служебные поля
-    Datasheet/Description, которые :meth:`Footprint.new` добавляет по образцу KiCad 9,
-    удаляются: генераторы их не создают (как kicad-footprint-generator, lab-generators.md
-    §1.2 п.4); KiCad добавит их сам при открытии.
+    Footprint/Datasheet/Description, которые :meth:`Footprint.new` добавляет по образцу
+    KiCad 8/9, удаляются: генераторы их не создают (как kicad-footprint-generator,
+    lab-generators.md §1.2 п.4); KiCad добавит их сам при открытии.
     """
     if not isinstance(name, str) or not name:
         raise ValueError("имя корпуса не может быть пустым")
-    fp = Footprint.new(name, version=DEFAULT_VERSION, descr=descr, tags=tags, attrs=attrs)
+    fp = Footprint.new(name, version=current_version(), descr=descr, tags=tags, attrs=attrs)
     props = fp.properties
     for key in ("Footprint", "Datasheet", "Description"):
         if key in props:

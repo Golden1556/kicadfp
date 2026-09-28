@@ -821,6 +821,87 @@ def test_coerce_param():
 
 
 # ---------------------------------------------------------------------------------------------
+# Формат новых корпусов: KiCad 9 по умолчанию, KiCad 6/7/8 — target_version (ТЗ 4.5.3)
+# ---------------------------------------------------------------------------------------------
+
+_FORMATS = {6: 20211014, 7: 20221018, 8: 20240108, 9: 20241229}
+
+
+def test_default_format_is_kicad9():
+    assert G.current_version() == DEFAULT_VERSION == 20241229
+    assert all(_gen(n, p).version == DEFAULT_VERSION for n, p in VARIANTS[:len(GENERATORS)])
+
+
+@pytest.mark.parametrize("kicad", sorted(_FORMATS))
+@pytest.mark.parametrize("name, params", VARIANTS, ids=VARIANT_IDS)
+def test_target_version_every_generator(kicad, name, params):
+    """Регрессия (приёмка, сценарий 5): корпуса генераторов были только в формате KiCad 9
+    (20241229), который KiCad 8 не открывает («Unable to load library»). В блоке
+    ``target_version`` тот же корпус строится в формате нужной версии: те же площадки и
+    графика, без ошибок проверки, запись/чтение без потерь."""
+    ref = _gen(name, params)
+    with G.target_version(kicad) as v:
+        assert v == _FORMATS[kicad] == G.current_version()
+        fp = _gen(name, params)
+    assert G.current_version() == DEFAULT_VERSION
+    assert fp.version == _FORMATS[kicad]
+    # порядок площадок с одинаковым номером (монтажные отверстия "") — по writer'у версии
+    assert sorted(_pads(fp)) == sorted(_pads(ref))
+    assert _seg_set(fp, ("F.SilkS", "F.Fab", "F.CrtYd")) == \
+        _seg_set(ref, ("F.SilkS", "F.Fab", "F.CrtYd"))
+    # порядок узлов — как у writer'а своей версии (KiCad 6/7 сортируют тексты иначе)
+    assert sorted((t.kind, t.text, t.layer, t.position, t.angle) for t in fp.texts) == \
+        sorted((t.kind, t.text, t.layer, t.position, t.angle) for t in ref.texts)
+    assert not [i for i in validate(fp) if i.level == "error"]
+    text = fp.dumps()
+    assert f"(version {_FORMATS[kicad]})" in text
+    again = loads(text)
+    assert again.dumps() == text and sexpr.equal(again.node, fp.node)
+
+
+def test_target_version_forms_of_kicad8_and_kicad6():
+    """Форма записи — по профилю версии: KiCad 8 — ``(fill none)``, без ``embedded_fonts``;
+    KiCad 6 — ``fp_text``, ``(width …)``, ``tedit``, слои групп без кавычек."""
+    with G.target_version(8):
+        k8 = lab_dip14().dumps()
+    assert "(fill none)" in k8 and "(fill no)" not in k8 and "embedded_fonts" not in k8
+    assert '(property "Reference" "REF**"' in k8 and '(generator_version "' in k8
+    k9 = lab_dip14().dumps()
+    assert "(fill no)" in k9 and "(fill none)" not in k9
+    with G.target_version("kicad6"):
+        k6 = lab_dip14().dumps()
+    assert "(fp_text reference" in k6 and "(width 0.12)" in k6 and "(stroke" not in k6
+    assert "(tedit " in k6 and "(layers *.Cu *.Mask)" in k6 and "generator_version" not in k6
+
+
+def test_target_version_nested_restores_and_rejects_unknown():
+    with G.target_version(8):
+        with G.target_version(20221018):
+            assert G.current_version() == 20221018
+        assert G.current_version() == 20240108
+    assert G.current_version() == DEFAULT_VERSION
+    for bad in (5, 10, "20240109", True, "kicad"):
+        with pytest.raises(ValueError, match="версия KiCad"):
+            with G.target_version(bad):
+                pass  # pragma: no cover
+    assert G.current_version() == DEFAULT_VERSION
+    with pytest.raises(ZeroDivisionError):
+        with G.target_version(8):
+            raise ZeroDivisionError
+    assert G.current_version() == DEFAULT_VERSION
+
+
+def test_from_json_version():
+    assert from_json("lab_mlt", {}, version=8).version == 20240108
+    assert from_json("lab_mlt", {}, version="7").version == 20221018
+    assert from_json("lab_mlt", {}, version=20211014).version == 20211014
+    assert from_json("lab_mlt", {}).version == DEFAULT_VERSION
+    assert from_json("lab_mlt", {}, version=9).dumps() == lab_mlt().dumps()
+    with pytest.raises(ValueError, match="версия KiCad"):
+        from_json("lab_mlt", {}, version=5)
+
+
+# ---------------------------------------------------------------------------------------------
 # Вспомогательная геометрия _common
 # ---------------------------------------------------------------------------------------------
 
@@ -931,3 +1012,57 @@ def test_fallback_sort_orders_pads_and_layers():
               and n.name != "fp_text"]
     assert layers == sorted(layers, key=order.__getitem__)
     assert C._strnum_key("10") > C._strnum_key("9") > C._strnum_key("")
+
+
+def test_coerce_param_rejects_wrong_kinds():
+    """Логические не принимаются за числа, строковые параметры — только строки,
+    повреждённый JSON-список и не-список монтажных отверстий — ValueError."""
+    cp = G.coerce_param
+    with pytest.raises(ValueError, match="ожидается число"):
+        cp("dip", "pitch", True)
+    with pytest.raises(ValueError, match="ожидается число"):
+        cp("dip", "pitch", "abc")
+    with pytest.raises(ValueError, match="целое"):
+        cp("dip", "pins", False)
+    assert cp("dip", "first_square", 1) is True
+    assert cp("dip", "first_square", 0.0) is False
+    with pytest.raises(ValueError, match="логическое"):
+        cp("dip", "first_square", 2)
+    with pytest.raises(ValueError, match="ожидается строка"):
+        cp("pin_header", "numbering", 5)
+    with pytest.raises(ValueError, match="неверный JSON"):
+        cp("pin_header", "mounting_holes", "[[1, 2, 3]")
+    with pytest.raises(ValueError, match="список троек"):
+        cp("pin_header", "mounting_holes", 5)
+    assert cp("pin_header", "mounting_holes", "null") is None
+
+
+def test_describe_and_coerce_for_unannotated_generator(monkeypatch):
+    """Генератор без аннотаций и без раздела «Параметры:»: тип берётся из умолчания
+    (или ``Any``), описаний нет, значения неизвестных типов передаются как есть."""
+    def custom(name="X", count=3, extra=None, *args, opts: dict | None = None, **kw):
+        """Пользовательский генератор без описания параметров."""
+    monkeypatch.setitem(GENERATORS, "custom_tmp", custom)
+    info = {p.name: p for p in describe("custom_tmp")}
+    assert list(info) == ["name", "count", "extra", "opts"]      # *args/**kw пропущены
+    assert (info["name"].type, info["count"].type, info["extra"].type) == \
+        ("str", "int", "NoneType")
+    assert all(p.description == "" for p in info.values())
+    assert G.summary("custom_tmp") == "Пользовательский генератор без описания параметров."
+    assert G.coerce_param("custom_tmp", "count", "7") == 7
+    payload = {"a": 1}
+    assert G.coerce_param("custom_tmp", "opts", payload) is payload
+
+
+def test_param_docs_stops_at_dedent_and_joins_continuations():
+    def f(a, b):
+        """Кратко.
+
+        Параметры:
+
+            a: первая строка
+                продолжение описания
+            b: второй
+        Прочее: не параметр
+        """
+    assert G._param_docs(f) == {"a": "первая строка продолжение описания", "b": "второй"}

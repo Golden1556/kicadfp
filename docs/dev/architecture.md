@@ -153,6 +153,10 @@ class FormatProfile:
     model_offset_token: str      # "offset" | "at"
 
 DEFAULT_VERSION = 20241229          # новые корпуса: KiCad 9
+KICAD_FORMAT_VERSIONS = {6: 20211014, 7: 20221018, 8: 20240108, 9: 20241229}  # формат KiCad X.0
+def kicad_format_version(target: int | str) -> int   # 8 / "8" / "kicad8" / 20240108 -> 20240108; иначе ValueError
+    # KiCad не открывает файл версии новее своей: корпус формата KiCad 9 KiCad 8 не читает,
+    # поэтому у генераторов и преобразования .mod формат можно выбрать (см. §8, §11, §13)
 def profile_for(version: int | None, root: str = "footprint") -> FormatProfile
 
 # Порядок дочерних токенов (для вставки новых узлов через Node.set/insert):
@@ -371,9 +375,10 @@ class ValidationError(Exception): issues: list[Issue]
 
 ```python
 class LegacyFormatError(ValueError): line: int          # ошибка формата с номером строки
-def read_library(path, *, compat: str = "kicad9") -> list[Footprint]   # PCBNEW-LibModule-V1 (.mod/.emp); единицы по заголовку (deci-mils / mm)
+def read_library(path, *, compat: str = "kicad9", version=None) -> list[Footprint]   # PCBNEW-LibModule-V1 (.mod/.emp); единицы по заголовку (deci-mils / mm)
 def loads_library(text, *, compat: str = "kicad9") -> list[Footprint]
-def convert(mod_path, out_dir, *, compat: str = "kicad9") -> list[Path]   # каждый модуль -> <out_dir>/<name>.kicad_mod (создаёт каталог .pretty)
+def convert(mod_path, out_dir, *, compat: str = "kicad9", version=None) -> list[Path]   # каждый модуль -> <out_dir>/<name>.kicad_mod (создаёт каталог .pretty)
+    # version: None -> DEFAULT_VERSION (KiCad 9); 6/7/8 или версия формата -> результат в формате этой версии
 def is_legacy(text_head: str) -> bool
 ```
 
@@ -442,7 +447,10 @@ error; нет Reference/Value — error; Reference/Value не на *.SilkS и н
 (F.SilkS), Value (F.Fab), контуром F.SilkS, контуром F.Fab, областью F.CrtYd (fp_rect, для
 радиальных конденсаторов — fp_circle), `attr through_hole`, `descr`/`tags`. Стандартные
 семейства (dip, pin_header, resistor, …) добавляют `${REFERENCE}` на F.Fab по правилам KLC;
-лабораторные `lab_dip14`/`lab_mlt`/`lab_snp8` воспроизводят методичку и `${REFERENCE}` не содержат. Реестр для CLI: `GENERATORS: dict[str, Callable]` с именами `dip`,
+лабораторные `lab_dip14`/`lab_mlt`/`lab_snp8` воспроизводят методичку и `${REFERENCE}` не содержат. Формат нового корпуса —
+`DEFAULT_VERSION` (KiCad 9) или заданный контекстом `with generators.target_version(8): …` (KiCad 6–9 или версия
+формата; `generators.current_version()` — действующая) / `from_json(kind, params, version=8)`: KiCad 8 файл формата
+KiCad 9 не открывает. Реестр для CLI: `GENERATORS: dict[str, Callable]` с именами `dip`,
 `pin_header`, `resistor`, `capacitor_radial`, `capacitor_axial`, `diode`, `transistor`,
 `lab_dip14`, `lab_mlt`, `lab_snp8`; параметры CLI берутся из сигнатуры (inspect) и/или JSON.
 
@@ -467,9 +475,9 @@ def save_png(fp, path, *, width: int = 800, **kw) -> None      # через PySi
 | `validate PATH` | `--strict`, `--json` | список замечаний `LEVEL CODE: message`; код возврата 1 при ошибках; с `--strict` — также при предупреждениях |
 | `set PATH SELECTOR VALUE` | `--write`, `-o OUT` | селектор: `footprint.descr`, `footprint.name`, `pad[3].size` (=size_x=size_y), `pad[3].size_x`, `pad[*].drill`, `pad[1].shape`, `pad[*].layers` ("F.Cu,F.Mask"), `text[reference].layer`, `graphic[0].width`, `model[0].path`; печатает, что изменено |
 | `pads PATH` | `--json` | таблица: №, тип, форма, X, Y, угол, размер X/Y, отверстие, слои |
-| `gen KIND [--param value …]` | `-o OUT`, `--params FILE.json`, `--name`, `--list` | параметры по сигнатуре генератора; без `-o` печатает в stdout |
+| `gen KIND [--param value …]` | `-o OUT`, `--params FILE.json`, `--name`, `--list`, `--kicad {6,7,8,9}` | параметры по сигнатуре генератора; без `-o` печатает в stdout; `--kicad 8` — формат KiCad 8 |
 | `fmt PATH` | `--write`, `--check`, `--style {auto,kicad8,kicad6}` | канонический формат; `--check` возвращает 1 если файл отличается |
-| `convert IN.mod` | `-o OUT.pretty` | конвертация старой библиотеки |
+| `convert IN.mod` | `-o OUT.pretty`, `--compat`, `--kicad {6,7,8,9}` | конвертация старой библиотеки |
 | `render PATH` | `-o OUT.svg/.png`, `--layers`, `--scale` | изображение |
 | `gui [PATH]` | | запуск GUI (ImportError -> сообщение об установке `pip install kicadfp[gui]`) |
 
@@ -512,7 +520,7 @@ gui/dialogs.py      GenerateDialog (выбор генератора, парам�
 * `conftest.py`: пути к фикстурам (`FIXTURES = tests/fixtures`), параметризация по всем
   `*.kicad_mod` (по каталогам версий), переменная окружения `KICADFP_EXTRA_FIXTURES`
   (дополнительные каталоги для расширенного прогона), `KICAD_CLI` (путь к kicad-cli для
-  необязательных тестов).
+  необязательных тестов), `KICAD8_CLI` (kicad-cli KiCad 8 для проверки открытия в KiCad 8).
 * `test_sexpr.py` — токенизация, строки/экранирование, числа, ошибки с позицией, prettify.
 * `test_roundtrip.py` — для каждого файла: `equal(parse(t), parse(dumps(parse(t))))`; для
   kicad8/kicad9/kicad10dev — байт-в-байт; для kicad6 — байт-в-байт там, где layout таблица
@@ -520,7 +528,10 @@ gui/dialogs.py      GenerateDialog (выбор генератора, парам�
 * `test_model_*.py` — по одному на тип узла: чтение всех атрибутов, запись каждого атрибута
   меняет только этот токен (diff по дереву ровно один), создание новых.
 * `test_validate.py`, `test_generators.py`, `test_library.py`, `test_legacy.py`, `test_cli.py`,
-  `test_render.py`, `test_gui_*.py` (offscreen), `test_acceptance.py` (сценарии приложения Г).
+  `test_render.py`, `test_gui_*.py` (offscreen), `test_acceptance.py` (сценарии приложения Г),
+  `test_kicad_cli.py` (файлы, записанные kicadfp, открывает KiCad 8 и 9; помощники —
+  `kicad_cli_tools.py`). Отчёт приёмки — `scripts/acceptance_report.py` →
+  `docs/acceptance_report.md`.
 * Покрытие ядра ≥ 80 % (`pytest --cov=kicadfp`).
 
 ## 16. Версионирование, упаковка

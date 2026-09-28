@@ -15,10 +15,12 @@
 ``validate PATH``              замечания ``LEVEL CODE: message`` (``--strict``, ``--json``)
 ``set PATH SELECTOR VALUE``    изменить свойство (``--write`` | ``-o OUT``; ``--strict``)
 ``pads PATH``                  таблица площадок (``--json``)
-``gen KIND [--ПАРАМЕТР …]``    типовой корпус (``-o``, ``--params``, ``--name``, ``--list``)
+``gen KIND [--ПАРАМЕТР …]``    типовой корпус (``-o``, ``--params``, ``--name``, ``--list``,
+                               ``--kicad``)
 ``fmt PATH``                   каноническое форматирование KiCad (``--check`` | ``--write`` |
                                ``-o``; ``--style``)
-``convert IN.mod``             старая библиотека ``.mod`` -> каталог ``.pretty`` (``-o``)
+``convert IN.mod``             старая библиотека ``.mod`` -> каталог ``.pretty`` (``-o``,
+                               ``--compat``, ``--kicad``)
 ``render PATH``                изображение SVG/PNG (``-o``, ``--layers``, ``--scale`` …)
 ``gui [PATH]``                 графический интерфейс (нужен PySide6)
 =============================  =============================================================
@@ -102,12 +104,15 @@ PATH — файл ``.kicad_mod`` (KiCad 5–10), каталог ``.pretty`` (к�
   (командная строка важнее); ``-o`` — файл ``.kicad_mod`` или каталог (существующий, с
   ``/`` в конце или с расширением ``.pretty``: файл ``<имя>.kicad_mod``, каталог
   создаётся); без ``--name`` при ``-o ФАЙЛ`` имя корпуса — имя файла (KiCad отождествляет
-  их); ``gen --list`` — генераторы, ``gen KIND --list`` — параметры генератора.
+  их); ``gen --list`` — генераторы, ``gen KIND --list`` — параметры генератора;
+  ``--kicad {6,7,8,9}`` — формат нового корпуса (по умолчанию KiCad 9; KiCad 8 файл
+  формата KiCad 9 не открывает, поэтому для KiCad 8 — ``--kicad 8``).
 * ``fmt``: без ключей для файла — текст в stdout, для каталога — список файлов, которые
   изменились бы; ``--style`` также принимает ``kicad7`` и ``kicad5``; перед записью
   проверяется, что дерево S-выражений не изменилось.
 * ``convert`` без ``-o`` ничего не пишет, а только перечисляет корпуса библиотеки;
-  ``--compat {kicad9,fixed}`` — режим :func:`kicadfp.legacy.convert`.
+  ``--compat {kicad9,fixed}`` — режим :func:`kicadfp.legacy.convert`; ``--kicad
+  {6,7,8,9}`` — формат результата (по умолчанию KiCad 9, для KiCad 8 — ``--kicad 8``).
 * ``render``: без ``-o`` — SVG в stdout; для библиотеки ``-o`` — каталог, файлы
   ``<имя>.svg``/``.png`` (``--format``); ``--width`` — ширина PNG.
 * ``gui [PATH]`` вызывает ``kicadfp.gui.main([PATH])``; без PySide6 — сообщение
@@ -159,6 +164,7 @@ _FALSE_WORDS = frozenset(("0", "false", "no", "n", "off", "нет"))
 _GRAPHIC_KINDS = ("line", "rect", "circle", "arc", "poly", "curve")
 _FMT_STYLES = ("auto", "kicad8", "kicad7", "kicad6", "kicad5")
 _IMAGE_FORMATS = ("svg", "png")
+_KICAD_TARGETS = ("6", "7", "8", "9")   # --kicad: формат новых корпусов (KiCad X)
 _INSTALL_GUI = "pip install kicadfp[gui]"
 _MAX_ERRORS = 10        # сколько ошибок ``set`` по библиотеке показывать
 
@@ -432,6 +438,9 @@ def build_parser() -> argparse.ArgumentParser:
                     help="список генераторов (с KIND — список его параметров)")
     sp.add_argument("--strict", action="store_true",
                     help="не записывать, если проверка находит ошибки (код 1)")
+    sp.add_argument("--kicad", choices=_KICAD_TARGETS, metavar="{6,7,8,9}",
+                    help="формат корпуса для KiCad этой версии (по умолчанию 9; KiCad 8 "
+                         "не открывает формат KiCad 9 — для него --kicad 8)")
 
     sp = command("fmt", _cmd_fmt, "каноническое форматирование KiCad (без изменения содержания)",
                  "Переписать файлы в каноническом форматировании KiCad (стиль — по версии "
@@ -458,6 +467,9 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--compat", choices=_legacy.COMPAT_MODES, default="kicad9",
                     help="kicad9 — как конвертер KiCad 9 (по умолчанию); fixed — физически "
                          "корректная конвертация (смещение 3D-модели в мм и др.)")
+    sp.add_argument("--kicad", choices=_KICAD_TARGETS, metavar="{6,7,8,9}",
+                    help="формат результата для KiCad этой версии (по умолчанию 9; для "
+                         "KiCad 8 — --kicad 8)")
 
     sp = command("render", _cmd_render, "изображение корпуса SVG или PNG")
     path_args(sp)
@@ -1971,7 +1983,7 @@ def _cmd_gen(ns: argparse.Namespace, extras: list[str]) -> int:
         if "name" in accepted:
             params["name"] = name
     try:
-        fp = _gen.from_json(kind, params)
+        fp = _gen.from_json(kind, params, version=ns.kicad)
     except (KeyError, ValueError, TypeError) as e:
         raise _CliError(f"gen {kind}: {_exc_text(e)}") from None
     if name is not None and "name" not in accepted:
@@ -2100,7 +2112,7 @@ def _cmd_convert(ns: argparse.Namespace, extras: list[str]) -> int:
         raise _CliError(f"{p}: не библиотека старого формата PCBNEW-LibModule-V1 (.mod)")
     issues: list[Any] = []
     if not ns.output:
-        fps = _legacy.read_library(p, compat=ns.compat, issues=issues)
+        fps = _legacy.read_library(p, compat=ns.compat, issues=issues, version=ns.kicad)
         _print_legacy_issues(issues)
         for fp in fps:
             _out(f"{fp.name} (площадок: {len(fp.pads)})")
@@ -2110,7 +2122,7 @@ def _cmd_convert(ns: argparse.Namespace, extras: list[str]) -> int:
     out = Path(ns.output)
     if out.exists() and not out.is_dir():
         raise _CliError(f"{out}: это файл — укажите каталог .pretty")
-    paths = _legacy.convert(p, out, compat=ns.compat, issues=issues)
+    paths = _legacy.convert(p, out, compat=ns.compat, issues=issues, version=ns.kicad)
     _print_legacy_issues(issues)
     for q in paths:
         _out(f"записан: {q}")

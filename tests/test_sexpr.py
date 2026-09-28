@@ -119,6 +119,41 @@ def test_unclosed_paren_reports_open_node():
     assert ei.value.line == 4
 
 
+def test_unclosed_paren_in_the_middle_points_to_the_node():
+    """Регрессия (приёмка, сценарий 7): пропущенная «)» в середине файла сдвигает все
+    закрывающие скобки, и к концу файла открытым остаётся корень — раньше сообщалась только
+    позиция конца файла. Теперь по отступам находится узел, который не закрыт: строка и
+    позиция указывают на него (формат KiCad 8/9 — табы, KiCad 6/7 — пробелы)."""
+    text8 = ('(footprint "X"\n\t(layer "F.Cu")\n\t(pad "1" smd rect\n\t\t(at 0 0\n'
+             '\t\t(size 1 1)\n\t\t(layers "F.Cu")\n\t)\n\t(pad "2" smd rect\n'
+             '\t\t(at 1 0)\n\t)\n)\n')
+    with pytest.raises(SexprSyntaxError) as ei:
+        parse(text8)
+    e = ei.value
+    assert (e.line, e.col) == (4, 3), str(e)
+    assert "не закрыт узел «at»" in e.msg and "строка 5" in e.msg
+    assert "в конце файла (строка 12)" in e.msg and "«footprint»" in e.msg
+    text6 = ('(footprint "X" (version 20211014) (generator pcbnew)\n  (layer "F.Cu")\n'
+             '  (pad "1" smd rect (at 0 0 (size 1 1) (layers "F.Cu") (tstamp 1))\n'
+             '  (pad "2" smd rect (at 1 0) (size 1 1) (layers "F.Cu") (tstamp 2))\n)\n')
+    with pytest.raises(SexprSyntaxError) as ei:
+        parse(text6)
+    assert (ei.value.line, ei.value.col) == (3, 3) and "«pad»" in ei.value.msg
+
+
+def test_unclosed_paren_without_indent_hint_reports_end():
+    # в одну строку — подсказки нет: позиция конца, открытый узел — корень
+    with pytest.raises(SexprSyntaxError) as ei:
+        parse('(footprint "X" (pad "1" (at 0 0) (size 1 1)')
+    assert (ei.value.line, ei.value.col) == (1, 44)
+    assert ei.value.msg == "незакрытая скобка: узел «pad» (открыт в строке 1, позиция 16)"
+    # не хватает только последней скобки корня — подсказка не нужна
+    with pytest.raises(SexprSyntaxError) as ei:
+        parse('(footprint "X"\n\t(layer "F.Cu")\n\t(pad "1" smd rect\n\t\t(at 0 0)\n\t)\n')
+    assert ei.value.line == 6 and "узел «footprint» (открыт в строке 1, позиция 1)" in \
+        ei.value.msg and "не закрыт узел" not in ei.value.msg
+
+
 def test_parse_all_multiple_roots():
     roots = parse_all("(a 1)\n(b 2)\n")
     assert [r.name for r in roots] == ["a", "b"]

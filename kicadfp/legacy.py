@@ -4,8 +4,9 @@
 точная реплика того, как библиотеку читает и пересохраняет в ``.pretty`` KiCad 9
 (``PCB_IO_KICAD_LEGACY`` → ``FootprintSave`` → writer S-выражений; тот же путь у
 ``kicad-cli fp upgrade LIB.mod``). Результат — корпуса :class:`~kicadfp.model.Footprint`
-формата :data:`~kicadfp.format_rules.DEFAULT_VERSION` (KiCad 9), ``generator "kicadfp"``,
-с новыми ``uuid``; они строятся через API :mod:`kicadfp.model`
+формата :data:`~kicadfp.format_rules.DEFAULT_VERSION` (KiCad 9; параметр ``version`` —
+формат KiCad 6/7/8, чтобы результат открывался и в этих версиях, ТЗ 4.5.3),
+``generator "kicadfp"``, с новыми ``uuid``; они строятся через API :mod:`kicadfp.model`
 (``Footprint.new`` + ``Pad.new``/``Line.new``/``Text.new``…), а порядок элементов — как у
 writer'а KiCad (поля, ``cmp_drawings``, ``cmp_pads``).
 
@@ -125,9 +126,9 @@ from pathlib import Path
 from typing import Iterable
 
 from . import layers as _L
-from .format_rules import DEFAULT_VERSION
+from .format_rules import DEFAULT_VERSION, kicad_format_version
 from .model import Arc, Circle, Drill, Footprint, Line, Model, Pad, Poly, Text
-from .model import _sort_root_like_kicad
+from .model import _V_THERMAL_ANGLE, _sort_root_like_kicad
 from .sexpr import Node, Sym, format_number
 
 __all__ = [
@@ -1249,9 +1250,10 @@ def _mmpt(p: Pt) -> tuple[float, float]:
     return (p[0] / 1e6, p[1] / 1e6)
 
 
-def _build(mod: _Module, compat: str, reader: _Reader) -> Footprint:
-    """Модуль → :class:`Footprint` (``FootprintSave``: ориентация обнуляется, запись
-    относительно якоря, порядок элементов — как у writer'а KiCad 9)."""
+def _build(mod: _Module, compat: str, reader: _Reader,
+           version: int = DEFAULT_VERSION) -> Footprint:
+    """Модуль → :class:`Footprint` формата ``version`` (``FootprintSave``: ориентация
+    обнуляется, запись относительно якоря, порядок элементов — как у writer'а KiCad 9)."""
     mod.set_orientation(0.0)
     layer_name = _L.legacy_layer_to_name(mod.layer_num)
     reader.module = mod
@@ -1267,7 +1269,7 @@ def _build(mod: _Module, compat: str, reader: _Reader) -> Footprint:
                     f"слой корпуса {mod.layer_num} ({layer_name}) — записан F.Cu", mod.line)
     else:
         fp_layer = "F.Cu"
-    fp = Footprint.new(mod.name, version=DEFAULT_VERSION, layer=fp_layer)
+    fp = Footprint.new(mod.name, version=version, layer=fp_layer)
     prof = fp.profile
     for t in (fp.reference, fp.value):
         if t is not None:
@@ -1324,7 +1326,7 @@ def _build(mod: _Module, compat: str, reader: _Reader) -> Footprint:
                             f"смещение 3D-модели «{m.path}» (дюймы) записано без пересчёта в "
                             f"мм, как в KiCad 9 (compat=\"fixed\" умножает на 25.4)", m.line)
         fp.add(Model.new(m.path, offset=offset, scale=m.scale, rotate=m.rotation, profile=prof))
-    _sort_root_like_kicad(fp.node, DEFAULT_VERSION)
+    _sort_root_like_kicad(fp.node, version)
     reader.module = None
     return fp
 
@@ -1396,8 +1398,9 @@ def _make_pad(p: _Pad, mod: _Module, prof: object) -> Pad:
         kw["zone_connect"] = p.zone_connect
     if p.thermal_width is not None:
         kw["thermal_bridge_width"] = _mm(p.thermal_width)
-    if p.shape != "circle":
+    if p.shape != "circle" and getattr(prof, "version", 0) >= _V_THERMAL_ANGLE:
         # угол спиц площадки по умолчанию — 45°; writer опускает только умолчание формы
+        # (в формате KiCad 6, version < 20211227, токена нет — угол задаёт парсер KiCad)
         kw["thermal_bridge_angle"] = 45.0
     if p.thermal_gap is not None:
         kw["thermal_gap"] = _mm(p.thermal_gap)
@@ -1437,34 +1440,47 @@ def _to_bytes(text: str | bytes | bytearray) -> bytes:
     raise TypeError("ожидается str или bytes")
 
 
+def _target_version(version: int | str | None) -> int:
+    """Версия формата результата: ``None`` — ``DEFAULT_VERSION`` (KiCad 9), иначе номер
+    KiCad 6–9 или версия формата (:func:`~kicadfp.format_rules.kicad_format_version`)."""
+    return DEFAULT_VERSION if version is None else kicad_format_version(version)
+
+
 def _load(data: bytes, compat: str, issues: list[LegacyIssue] | None,
-          path: str | None) -> list[Footprint]:
+          path: str | None, version: int | str | None = None) -> list[Footprint]:
+    v = _target_version(version)
     reader = _Reader(data, _check_compat(compat), issues, path)
     modules = reader.load()
     # FootprintEnumerate: имена — ключи std::map (побайтовая сортировка UTF-8)
     modules.sort(key=lambda nm: nm[0].encode("utf-8", "surrogatepass"))
-    return [_build(mod, compat, reader) for _, mod in modules]
+    return [_build(mod, compat, reader, v) for _, mod in modules]
 
 
 def loads_library(text: str | bytes, *, compat: str = "kicad9",
-                  issues: list[LegacyIssue] | None = None) -> list[Footprint]:
+                  issues: list[LegacyIssue] | None = None,
+                  version: int | str | None = None) -> list[Footprint]:
     """Прочитать библиотеку ``PCBNEW-LibModule-V1`` из текста (``str`` или ``bytes``).
 
     Возвращает корпуса формата KiCad 9 в порядке побайтовой сортировки имён (как
     ``FootprintEnumerate`` KiCad). ``compat`` — ``"kicad9"`` (как KiCad 9, по умолчанию) или
-    ``"fixed"`` (физически корректная конвертация, см. описание модуля). В ``issues``
-    (если передан список) добавляются замечания :class:`LegacyIssue`. Ошибка формата —
-    :class:`LegacyFormatError` с номером строки.
+    ``"fixed"`` (физически корректная конвертация, см. описание модуля). ``version`` —
+    формат результата: номер KiCad 6–9 или версия формата (``8`` → ``20240108``: такие
+    корпуса открывает и KiCad 8, который не читает формат KiCad 9); ``None`` — KiCad 9.
+    В ``issues`` (если передан список) добавляются замечания :class:`LegacyIssue`. Ошибка
+    формата — :class:`LegacyFormatError` с номером строки; неизвестная ``version`` —
+    ``ValueError``.
     """
-    return _load(_to_bytes(text), compat, issues, None)
+    return _load(_to_bytes(text), compat, issues, None, version)
 
 
 def read_library(path: str | PathLike[str], *, compat: str = "kicad9",
-                 issues: list[LegacyIssue] | None = None) -> list[Footprint]:
+                 issues: list[LegacyIssue] | None = None,
+                 version: int | str | None = None) -> list[Footprint]:
     """Прочитать файл библиотеки ``.mod``/``.emp`` (см. :func:`loads_library`); у
     :class:`LegacyFormatError` заполняется ``path``."""
     p = Path(path)
-    return _load(p.read_bytes(), compat, issues, str(p))
+    _target_version(version)  # неверная версия — ошибка до чтения файла
+    return _load(p.read_bytes(), compat, issues, str(p), version)
 
 
 def _file_name(name: str) -> str:
@@ -1473,16 +1489,18 @@ def _file_name(name: str) -> str:
 
 
 def convert(mod_path: str | PathLike[str], out_dir: str | PathLike[str], *,
-            compat: str = "kicad9", issues: list[LegacyIssue] | None = None) -> list[Path]:
+            compat: str = "kicad9", issues: list[LegacyIssue] | None = None,
+            version: int | str | None = None) -> list[Path]:
     """Преобразовать библиотеку ``.mod`` в каталог ``.pretty``: каждый модуль →
     ``<out_dir>/<имя>.kicad_mod`` (каталог создаётся; файлы с теми же именами
     перезаписываются атомарно). Сначала читается вся библиотека: при ошибке формата
-    (:class:`LegacyFormatError`) не пишется ни один файл — как у KiCad. Возвращает пути
+    (:class:`LegacyFormatError`) не пишется ни один файл — как у KiCad. ``version`` —
+    формат результата (см. :func:`loads_library`; ``8`` — для KiCad 8). Возвращает пути
     записанных файлов в порядке имён.
     """
     from .io import save  # локальный импорт: io импортирует legacy лениво
 
-    fps = read_library(mod_path, compat=compat, issues=issues)
+    fps = read_library(mod_path, compat=compat, issues=issues, version=version)
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     paths: list[Path] = []

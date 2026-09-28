@@ -871,6 +871,65 @@ def test_compat_validation():
         legacy.loads_library(lib(module("M")), compat="kicad5")
 
 
+# --- формат результата (version): KiCad 9 по умолчанию, KiCad 6/7/8 по запросу --------------------
+
+def test_version_default_is_kicad9(legacy_mod):
+    assert {fp.version for fp in legacy.read_library(legacy_mod)} == {DEFAULT_VERSION}
+    assert [norm(fp.dumps()) for fp in legacy.read_library(legacy_mod, version=9)] == \
+        [norm(fp.dumps()) for fp in legacy.read_library(legacy_mod)]
+
+
+@pytest.mark.parametrize("kicad, version", [(8, 20240108), ("7", 20221018), (20211014, 20211014)])
+def test_version_target_same_content(legacy_mod, tmp_path, kicad, version):
+    """Регрессия (приёмка, сценарий 10): результат конвертации был только в формате KiCad 9,
+    который KiCad 8 не открывает. ``version`` даёт тот же результат в формате другой версии:
+    площадки, графика, тексты совпадают (порядок узлов — по writer'у своей версии)."""
+    ref = legacy.read_library(legacy_mod)
+    fps = legacy.read_library(legacy_mod, version=kicad)
+    assert [fp.name for fp in fps] == [fp.name for fp in ref]
+    def key(p):
+        return (p.number, p.type, p.shape, p.x, p.y, p.size,
+                p.drill.size if p.drill else None, tuple(p.layers))
+
+    def gkey(g):
+        return (g.kind, g.layer, tuple(g.points), g.width)
+
+    def tkey(t):
+        return (t.kind, t.text, t.layer, t.position, t.angle, t.hide)
+
+    for fp, r in zip(fps, ref):
+        assert fp.version == version
+        assert sorted(map(key, fp.pads)) == sorted(map(key, r.pads))
+        assert sorted(map(gkey, fp.graphics)) == sorted(map(gkey, r.graphics))
+        # служебные пустые поля — по версии (KiCad 8 пишет ещё поле Footprint)
+        assert sorted(tkey(t) for t in fp.texts if t.text) == \
+            sorted(tkey(t) for t in r.texts if t.text)
+        text = fp.dumps()
+        assert loads(text).dumps() == text
+    paths = legacy.convert(legacy_mod, tmp_path / "k.pretty", version=kicad)
+    assert [load(q).version for q in paths] == [version] * 3
+
+
+def test_version_kicad6_has_no_thermal_bridge_angle():
+    """В формате KiCad 6 (до 20211227) токена thermal_bridge_angle нет — KiCad 9 пишет
+    его у некруглых площадок, в KiCad 6 угол спиц задаёт парсер."""
+    text = lib(module("M", *pad_block('Sh "1" R 100 100 0 0 0', "At SMD N 00888000",
+                                      "Po 0 0")))
+    assert "thermal_bridge_angle" in legacy.loads_library(text)[0].dumps()
+    assert "thermal_bridge_angle" in legacy.loads_library(text, version=7)[0].dumps()
+    k6 = legacy.loads_library(text, version=6)[0].dumps()
+    assert "thermal_bridge_angle" not in k6 and "(version 20211014)" in k6
+
+
+def test_version_validation(legacy_mod, tmp_path):
+    for bad in (5, 10, "20240109"):
+        with pytest.raises(ValueError, match="версия KiCad"):
+            legacy.loads_library(lib(module("M")), version=bad)
+        with pytest.raises(ValueError, match="версия KiCad"):
+            legacy.convert(legacy_mod, tmp_path / "x.pretty", version=bad)
+    assert not (tmp_path / "x.pretty").exists()
+
+
 # --- ошибки формата -------------------------------------------------------------------------------
 
 @pytest.mark.parametrize("text, line, fragment", [

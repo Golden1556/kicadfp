@@ -53,7 +53,7 @@ const acc = await agent(COMMON + SCENARIOS + KNOWN_GAPS + `
 phase('Coverage')
 const cov = await agent(COMMON + `
 ЗАДАЧА: покрытие. Запусти QT_QPA_PLATFORM=offscreen ${PY} -m pytest -q --cov=kicadfp --cov-report=term-missing (gui исключён в pyproject; отдельно посчитай и с gui). Требование ТЗ: ≥ 80 % по ядру. Для каждого модуля с покрытием < 85 % добавь целевые тесты на непокрытые ветви (ошибки, редкие формы токенов, CLI-ветки, legacy-ветки, render формы площадок). Не пиши бессмысленные тесты «ради процентов» — каждый тест проверяет конкретное поведение с осмысленным assert. Итог: таблица покрытия по модулям в ответе; сохрани отчёт в docs/coverage.md (кратко) — и обнови, если он уже есть.`,
-  { label: 'qa:coverage', phase: 'Coverage', effort: 'high', model: 'opus' })
+  { label: 'qa:coverage', phase: 'Coverage', effort: (args && args.fast) ? 'medium' : 'high', model: 'opus' })
 
 phase('Hunt')
 const BUGS_SCHEMA = {
@@ -65,21 +65,27 @@ const BUGS_SCHEMA = {
   required: ['bugs'],
 }
 const VERDICT = { type: 'object', properties: { real: { type: 'boolean' }, reason: { type: 'string' } }, required: ['real', 'reason'] }
-const HUNTERS = [
+const HUNTERS = (args && args.fast) ? [
+  'round-trip и сохранение без потерь на редких конструкциях из полных клонов (custom pads, zones, groups, teardrops, padstack, чужие генераторы, юникод) + модель: setter каждого класса представления на файлах всех версий (kicad5 module, 6, 8, 9) меняет ровно один токен в форме своей версии, kicad-cli читает результат',
+  'CLI: все команды и опции, пути-каталоги, ошибки, --json, коды возврата, юникод в путях и текстах, set с разными селекторами и типами значений',
+  'генераторы, validate и legacy .mod: граничные параметры (pins=2, rows=1, отрицательные/нулевые), ложные срабатывания validate на реальных библиотеках, синтетические .mod по спецификации legacy-mod.md',
+] : [
   'round-trip и сохранение без потерь на редких конструкциях из полных клонов (custom pads, zones, groups, dimension, fp_text_box, image, teardrops, padstack, чужие генераторы, юникод)',
   'модель: каждый setter каждого класса представления на файлах всех версий (kicad5 module, 6, 8, 9): меняется ровно один токен, форма токена соответствует версии, kicad-cli читает результат',
   'CLI: все команды и опции, пути-каталоги, ошибки, --json, коды возврата, юникод в путях и текстах, set с разными селекторами и типами значений',
   'генераторы и validate: граничные параметры (pins=2, rows=1, отрицательные/нулевые), сравнение с KLC и стандартной библиотекой, ложные срабатывания validate на реальных библиотеках',
   'legacy .mod: реальные старые библиотеки (скачай 2–3 .mod из https://github.com/KiCad/kicad-library/tree/master/modules или иных источников KiCad 4, если сеть доступна; иначе синтетика по спецификации), сравнение с тем, как их читает kicad-cli (kicad-cli 10 умеет читать .mod? проверь: kicad-cli fp upgrade на .mod-файле — если да, сравни площадки/графику с нашим convert численно)',
 ]
+const MAX_ROUNDS = (args && args.fast) ? 2 : 4
+const DRY_LIMIT = (args && args.fast) ? 1 : 2
 const seen = new Set()
 let dry = 0, round = 0
 const confirmed = []
-while (dry < 2 && round < 4) {
+while (dry < DRY_LIMIT && round < MAX_ROUNDS) {
   round++
   const found = (await parallel(HUNTERS.map((h, i) => () => agent(COMMON + `
 РОЛЬ: искатель дефектов #${i + 1}, раунд ${round}. Направление: ${h}. Уже известные (не повторяй): ${JSON.stringify([...seen])}. Пиши скрипты в ${SCRATCH}/hunt/r${round}_${i + 1}/ (создай), запускай на реальных данных, ищи РЕАЛЬНЫЕ дефекты (потеря данных, неверный файл, падение, нарушение ТЗ/контракта). Ничего не исправляй. Каждый bug — с точным repro (команда/скрипт) и фактическим выводом.`,
-    { label: `hunt:${round}:${i + 1}`, phase: 'Hunt', schema: BUGS_SCHEMA, effort: 'high', model: 'opus' })))).filter(Boolean).flatMap(r => r.bugs || [])
+    { label: `hunt:${round}:${i + 1}`, phase: 'Hunt', schema: BUGS_SCHEMA, effort: (args && args.fast) ? 'medium' : 'high', model: 'opus' })))).filter(Boolean).flatMap(r => r.bugs || [])
   const fresh = found.filter(b => !seen.has(b.title) && b.severity !== 'low')
   log(`Раунд ${round}: найдено ${found.length}, новых ${fresh.length}`)
   if (!fresh.length) { dry++; continue }
@@ -87,7 +93,7 @@ while (dry < 2 && round < 4) {
   fresh.forEach(b => seen.add(b.title))
   const judged = await parallel(fresh.map(b => () =>
     agent(COMMON + `\nРОЛЬ: судья. Проверь заявленный дефект, воспроизведи repro. Дефект: ${JSON.stringify(b)}. Реальный ли он (нарушение ТЗ/контракта/потеря данных/падение), а не вкусовщина? По умолчанию при сомнении — real=false.`,
-      { label: `judge:${round}`, phase: 'Hunt', schema: VERDICT, effort: 'medium', model: 'opus' }).then(v => ({ b, real: v && v.real }))))
+      { label: `judge:${round}`, phase: 'Hunt', schema: VERDICT, effort: (args && args.fast) ? 'low' : 'medium', model: (args && args.fast) ? 'sonnet' : 'opus' }).then(v => ({ b, real: v && v.real }))))
   const real = judged.filter(j => j.real).map(j => j.b)
   confirmed.push(...real)
   if (real.length) {

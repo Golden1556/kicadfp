@@ -1151,6 +1151,27 @@ def test_views_and_transformations_on_fixtures(path):
         assert sexpr.equal(sexpr.parse(u.dumps()), u.node, ignore_quotes=False)
 
 
+_SPECIAL = sorted((FIXTURES / "special").rglob("*.kicad_mod"))
+
+
+def test_special_fixtures_exist():
+    assert len(_SPECIAL) >= 200
+
+
+@pytest.mark.parametrize("path", _SPECIAL, ids=[str(p.relative_to(FIXTURES)) for p in _SPECIAL])
+def test_views_read_every_special_fixture(path):
+    """Каждый файл с редкими конструкциями (zone, group, custom pads, chamfer, dimension,
+    fp_text_box, image, …; tests/fixtures/special): все представления читаются без
+    исключений, неизменённый корпус записывается без потерь (приёмка, критика спецификаций)."""
+    fp = kicadfp.load(path)
+    _touch_all(fp)
+    for p in fp.pads:
+        for g in p.primitive_views:
+            (g.kind, g.layer, list(g.points), g.fill)
+    (fp.zones, fp.groups, fp.unknown, fp.attrs, fp.properties.keys())
+    assert sexpr.equal(sexpr.parse(fp.dumps()), sexpr.parse(path.read_text(encoding="utf-8")))
+
+
 # ---------------------------------------------------------------------------
 # Регрессии: версия файла — обещание (принцип 15 model.py)
 # ---------------------------------------------------------------------------
