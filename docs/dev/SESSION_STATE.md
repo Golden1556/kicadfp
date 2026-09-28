@@ -1,6 +1,6 @@
 # Состояние работы и инструкция по продолжению (для облачной сессии)
 
-Обновлено: 2026-09-28 (облачная сессия, после волны core). Первая сессия велась локально на
+Обновлено: 2026-09-28 (облачная сессия, после волн core и gui). Первая сессия велась локально на
 Mac; всё, что нужно для продолжения, лежит в этом репозитории.
 
 ## Что это
@@ -78,17 +78,31 @@ Mac; всё, что нужно для продолжения, лежит в эт
    `test_geometry.py`, `test_model_*.py`, `test_io.py`, `test_legacy.py`, `test_validate.py`,
    `test_generators.py`, `test_library.py`, `test_render.py`, `test_cli.py`.
 
+8. **GUI** (`kicadfp/gui/`, PySide6): `document.py` (FootprintDocument, undo/redo по снимкам
+   узлов, отмена возвращает файл байт в байт), `commands.py`, `app.py`, `canvas.py`
+   (PreviewCanvas: все элементы по DRAW_ORDER/COLORS, зум, панорамирование, выбор,
+   перетаскивание с привязкой), `pad_table.py`/`items_table.py`/`props_panel.py`,
+   `libtree.py`, `dialogs.py` (GenerateDialog, ValidateDialog, PadBatchDialog,
+   ItemPropertiesDialog, AboutDialog, CopyFootprintDialog), `mainwindow.py` (все меню,
+   док-панели, QSettings; модальные окна подменяются функциями для тестов). Тесты
+   `tests/test_gui_*.py` (≈400, offscreen), `tests/gui_screenshots.py` → `docs/img/gui_main.png`.
+   Ревью GUI: 6 замечаний (незавершённый ввод при Ctrl+S/закрытии, повторное открытие
+   файла с «Сохранить», no-op смены слоёв и др.) исправлены, регрессии в
+   `tests/test_gui_regressions.py`.
+
 ## Не сделано (по порядку)
 
-1. **GUI** на PySide6 — `scripts/workflows/gui.js`.
-2. **Приёмка** (сценарии Г.1–Г.10, kicad-cli, покрытие ≥ 80 %, охота на дефекты до исчерпания)
+1. **Приёмка** (сценарии Г.1–Г.10, kicad-cli, покрытие ≥ 80 %, охота на дефекты до исчерпания)
    — `scripts/workflows/qa.js`.
-3. **Документация** по ТЗ п.5 (описание программы, руководство пользователя, руководство
+2. **Документация** по ТЗ п.5 (описание программы, руководство пользователя, руководство
    программиста, ПМИ) + README + DOCX — `scripts/workflows/docs.js`.
 
 Волна **core** (`scripts/workflows/core.js`) выполнена в облаке 2026-09-28 (19 агентов Opus,
 ~10,5 ч при 4 CPU → 2 агента одновременно); фазы Sexpr/Review-Sexpr пропускались через
-`args.skip_sexpr: true`.
+`args.skip_sexpr: true`. Волна **gui** выполнена 2026-09-28 (8 агентов; дважды
+возобновлялась через `resumeFromRunId` после перезапуска контейнера и прерывания пользователем —
+кэш завершённых агентов сработал; `gui.js` принимает `args.main_note` для дополнения промпта
+главного окна).
 
 Скрипты рассчитаны на инструмент Workflow: запускать `Workflow({scriptPath, args: {repo:
 "<абсолютный путь к репозиторию>", kicad_cli: "<путь к kicad-cli>", kicad_note: "<описание
