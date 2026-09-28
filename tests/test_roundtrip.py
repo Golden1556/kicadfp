@@ -15,6 +15,7 @@ from pathlib import Path
 
 import pytest
 
+from kicadfp import io as kio
 from kicadfp import sexpr
 from tests.conftest import FIXTURES, LEGACY_LAYOUT_DIRS, extra_fixture_files, fixture_files
 
@@ -45,12 +46,15 @@ def test_tree_roundtrip_every_fixture(any_fixture: Path):
     assert sexpr.dumps(tree2) == out
 
 
+def _io_roundtrip(path: Path) -> tuple[str, str]:
+    """Текст файла и результат ``io.dumps(io.load(path))`` (со стилем конца файла, который
+    корпус запоминает при чтении: файлы KiCad 8.0.0/8.0.1 — без ``\n``)."""
+    return path.read_text(encoding="utf-8"), kio.dumps(kio.load(path))
+
+
 def test_bytes_roundtrip_prettify_files(prettify_fixture: Path):
-    text, out, _, _ = _roundtrip(prettify_fixture)
+    text, out = _io_roundtrip(prettify_fixture)
     if out == text:
-        return
-    if out.rstrip("\n") == text.rstrip("\n"):
-        # файлы из kicad-footprints 8.0.0 не имеют завершающего перевода строки
         return
     # Пропуск — только для файлов сторонних генераторов. Признак «по одной точке xy в
     # строке» не годится: так же выглядит обычный вывод Prettify «(pts\n\t\t\t(xy …»,
@@ -71,8 +75,7 @@ def test_prettify_polygon_files_are_byte_checked():
         text = p.read_text(encoding="utf-8")
         if _XY_PER_LINE.search(text) and _generator_name(text) == "pcbnew":
             pcbnew_polys += 1
-            out = sexpr.dumps(sexpr.parse(text))
-            assert out.rstrip("\n") == text.rstrip("\n"), p
+            assert kio.dumps(kio.loads(text)) == text, p
     assert pcbnew_polys >= 100
     assert _generator_name('(footprint "X"\n\t(version 1)\n\t(generator pcbnew)') == "pcbnew"
     assert _generator_name('(footprint "X" (generator "kicad-footprint-generator"))') == \
@@ -102,7 +105,7 @@ _LEGACY_STYLE_EXCEPTIONS = {
 @pytest.mark.parametrize("path", fixture_files(*LEGACY_LAYOUT_DIRS),
                          ids=[str(p.relative_to(FIXTURES)) for p in fixture_files(*LEGACY_LAYOUT_DIRS)])
 def test_bytes_roundtrip_legacy_layout(path: Path):
-    text, out, _, _ = _roundtrip(path)
+    text, out = _io_roundtrip(path)
     rel = str(path.relative_to(FIXTURES))
     if rel in _LEGACY_STYLE_EXCEPTIONS or path.name in {Path(x).name for x in _LEGACY_STYLE_EXCEPTIONS}:
         pytest.xfail("известное исключение раскладки")
@@ -115,7 +118,7 @@ def test_bytes_roundtrip_legacy_layout(path: Path):
         pytest.skip("заголовок в одну строку при version 20211014: ночная сборка 2021-10-15…11-13")
     if "allowed )" in text:
         pytest.skip("keepout-зона writer'а KiCad 6.0.0–6.0.6 с лишним пробелом (по дереву не восстановить)")
-    assert out.rstrip("\n") == text.rstrip("\n")
+    assert out == text
 
 
 def test_roundtrip_statistics_summary():
@@ -125,7 +128,7 @@ def test_roundtrip_statistics_summary():
     ok = 0
     for p in files:
         text, out, tree, tree2 = _roundtrip(p)
-        if sexpr.equal(tree, tree2) and out.rstrip("\n") == text.rstrip("\n"):
+        if sexpr.equal(tree, tree2) and kio.dumps(kio.loads(text)) == text:
             ok += 1
     assert ok == len(files)
 
@@ -160,8 +163,7 @@ def test_bytes_roundtrip_extra_fixtures():
         if text.split("\n", 2)[1:2] and text.split("\n", 2)[1].startswith(" (layer"):
             continue
         checked += 1
-        out = sexpr.dumps(sexpr.parse(text))
-        if out.rstrip("\n") != text.rstrip("\n"):
+        if kio.dumps(kio.loads(text)) != text:
             bad.append(str(p))
     # файлы KiCad 5 из генератора KicadModTree тоже начинаются с «(module» — их раскладка
     # отличается (gr_poly по 4 точки, model в одну строку и т. п.): допускается до 5 %
@@ -206,10 +208,20 @@ def test_dumps_uses_lf_and_trailing_newline(dip14_v8: Path):
     assert "\r" not in out and out.endswith(")\n")
 
 
+def _skip_if_tracing() -> None:
+    """Пропуск тестов на скорость под coverage/отладчиком: трассировка замедляет код в разы,
+    и пороги времени теряют смысл."""
+    import sys
+
+    if sys.gettrace() is not None or "coverage" in sys.modules:
+        pytest.skip("тест производительности не выполняется под трассировкой (coverage)")
+
+
 def test_parse_speed_kicad8_fixtures():
     """Цель ревью: разбор < 4 мс на файл (в среднем по библиотекам KiCad 8)."""
     import time
 
+    _skip_if_tracing()
     texts = [p.read_text(encoding="utf-8") for p in fixture_files("kicad8")]
     t0 = time.perf_counter()
     for t in texts:
@@ -221,6 +233,7 @@ def test_parse_speed_kicad8_fixtures():
 def test_performance_parse_and_dump(dip14_v8: Path):
     import time
 
+    _skip_if_tracing()
     text = dip14_v8.read_text(encoding="utf-8")
     t0 = time.perf_counter()
     for _ in range(20):

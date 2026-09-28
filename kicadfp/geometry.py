@@ -153,14 +153,33 @@ class ArcGeometry(NamedTuple):
     sweep: float
 
 
+def _same_nm(a: Point, b: Point) -> bool:
+    """Совпадают ли точки после округления до нанометра (внутренняя единица KiCad)."""
+    return (round(a[0] * 1e6) == round(b[0] * 1e6)
+            and round(a[1] * 1e6) == round(b[1] * 1e6))
+
+
 def arc_from_three_points(start: Point, mid: Point, end: Point) -> ArcGeometry | None:
     """Центр, радиус и углы дуги, проходящей через ``start``, ``mid``, ``end``.
 
     Возвращает ``None`` для вырожденной (коллинеарной) дуги.
+
+    Полная окружность (дуга на 360°): ``start`` совпадает с ``end`` с точностью до
+    нанометра, а ``mid`` отличается от них. Такие дуги пишет и читает KiCad (есть в
+    стандартных библиотеках всех версий); как ``CalcArcCenter`` KiCad (trigo.cpp), центр —
+    середина отрезка ``start``–``mid``, радиус — половина его длины. Направление — как у
+    KiCad (``EDA_SHAPE::CalcArcAngles``: конечный угол = начальный + 360° в системе KiCad,
+    т.е. по часовой стрелке на экране): ``sweep = -360``, ``end_angle == start_angle``.
     """
     ax, ay = start
     bx, by = mid
     cx, cy = end
+    if _same_nm(start, end):
+        if _same_nm(start, mid):
+            return None
+        center = ((ax + bx) / 2.0, (ay + by) / 2.0)
+        sa = angle_of(center, start)
+        return ArcGeometry(center, distance(start, mid) / 2.0, sa, sa, -360.0)
     d = 2.0 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by))
     if abs(d) < 1e-12:
         return None

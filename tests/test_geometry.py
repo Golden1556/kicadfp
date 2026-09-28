@@ -122,3 +122,19 @@ def test_round_and_snap():
     assert round_mm(1.23456789) == 1.234568
     assert snap(1.2499, 1.25) == 1.25
     assert snap(1.0, 0) == 1.0
+
+
+def test_arc_full_circle_start_equals_end():
+    """Регрессия: start == end (до нанометра), mid отличается — полная окружность, как
+    ``CalcArcCenter`` KiCad: центр — середина start–mid."""
+    g = arc_from_three_points((-2, 2.5), (7, 2.5), (-2, 2.5))
+    assert g is not None
+    assert g.center == pytest.approx((2.5, 2.5)) and g.radius == pytest.approx(4.5)
+    assert g.sweep == -360.0 and g.start_angle == g.end_angle == pytest.approx(180.0)
+    near = arc_from_three_points((0, 0), (0, 2), (0.0000004, 0))  # совпадают до 1 нм
+    assert near is not None and near.sweep == -360.0 and near.center == (0.0, 1.0)
+    assert arc_from_three_points((1, 1), (1, 1), (1, 1)) is None
+    assert arc_bbox((-2, 2.5), (7, 2.5), (-2, 2.5)) == pytest.approx((-2, -2, 7, 7))
+    pts = arc_points((0, 0), (0, 2), (0, 0))
+    assert pts[0] == pts[-1] == (0, 0)
+    assert max(p[1] for p in pts) == pytest.approx(2.0, abs=0.01)
